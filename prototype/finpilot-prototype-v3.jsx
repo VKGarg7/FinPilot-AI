@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, createContext, useContext } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar as RechartsBar, CartesianGrid, LineChart, Line,
+  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, LineChart, Line,
 } from "recharts";
 
 /* ================================================================
@@ -246,7 +246,7 @@ function Explain({ text }) {
     </span>
   );
 }
-function Bar({ pct, height = 8 }) {
+function Meter({ pct, height = 8 }) {
   const T = useT();
   const color = pct >= 100 ? T.danger : pct >= 80 ? "#D97706" : pct >= 50 ? T.warn : T.success;
   return (
@@ -297,41 +297,242 @@ function ScoreRadial({ score, size = 150, light }) {
 }
 
 /* ================================================================
-   SPLASH / ONBOARDING (Epic 1 nod)
+   ONBOARDING — Epic 1 (Tickets 1.1–1.5)
+   Welcome → Sign-up/OTP → Persona → AA Consent → Link accounts
+   → First Health Score reveal (the activation moment, Product Goal 1)
    ================================================================ */
-function Splash({ onEnter, T }) {
+const BANKS = [
+  { name: "HDFC Bank", icon: "🏦" }, { name: "ICICI Bank", icon: "🏛️" },
+  { name: "SBI", icon: "🏤" }, { name: "Axis Bank", icon: "🏢" },
+  { name: "Zerodha (Broker)", icon: "📈" }, { name: "Kotak Mahindra", icon: "🏦" },
+];
+function ObShell({ T, step, total, children }) {
   return (
     <div style={{
-      position: "fixed", inset: 0, zIndex: 100, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
+      position: "fixed", inset: 0, zIndex: 100, overflowY: "auto",
       background: `radial-gradient(1200px 800px at 20% 10%, ${T.heroC}, transparent), linear-gradient(150deg, ${T.heroA}, ${T.heroB} 55%, ${T.heroC})`,
-      color: "#fff", padding: 24, textAlign: "center",
+      color: "#fff", padding: "28px 20px 40px", display: "flex", flexDirection: "column", alignItems: "center",
     }}>
-      <div className="floatY" style={{ fontSize: 52, marginBottom: 8 }}>✦</div>
-      <div className="fadeUp" style={{ ...disp, fontSize: 34, fontWeight: 700, letterSpacing: "-.01em" }}>
-        FinPilot <span style={{ color: "#A9E8D8" }}>AI</span>
-      </div>
-      <div className="fadeUp" style={{ maxWidth: 300, fontSize: 14.5, lineHeight: 1.65, opacity: .88, margin: "12px 0 6px", animationDelay: "120ms" }}>
-        Your financial operating system — every insight grounded in your real numbers, never guessed.
-      </div>
-      <div className="fadeUp" style={{ display: "flex", gap: 14, margin: "18px 0 26px", animationDelay: "240ms" }}>
-        {[["Deterministic math", "∑"], ["Grounded AI", "✦"], ["You own your data", "◈"]].map(([t, i]) => (
-          <div key={t} style={{ fontSize: 11, opacity: .85, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: 88 }}>
-            <span style={{ fontSize: 18 }}>{i}</span>{t}
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        {step > 0 && (
+          <div style={{ display: "flex", gap: 5, marginBottom: 26 }}>
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} style={{ flex: 1, height: 4, borderRadius: 4, background: i < step ? "#fff" : "rgba(255,255,255,.22)", transition: "background .3s" }} />
+            ))}
           </div>
-        ))}
-      </div>
-      <button onClick={onEnter} className="fadeUp"
-        style={{
-          animationDelay: "360ms", background: "#fff", color: T.heroA, border: "none", borderRadius: 14,
-          padding: "14px 34px", fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 12px 34px rgba(0,0,0,.28)",
-        }}>
-        Enter demo — Arjun's dashboard →
-      </button>
-      <div className="fadeUp" style={{ fontSize: 10.5, opacity: .6, marginTop: 16, animationDelay: "480ms" }}>
-        Wave 1 prototype · Epics 1–5 · synthetic data
+        )}
+        {children}
       </div>
     </div>
+  );
+}
+function ObButton({ children, onClick, disabled, secondary, T }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{
+        width: "100%", background: secondary ? "rgba(255,255,255,.12)" : "#fff",
+        color: secondary ? "#fff" : T.heroA, border: secondary ? "1px solid rgba(255,255,255,.3)" : "none",
+        borderRadius: 14, padding: "15px 20px", fontSize: 15, fontWeight: 800, cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.45 : 1, marginTop: 14, boxShadow: secondary ? "none" : "0 12px 34px rgba(0,0,0,.28)",
+        transition: "opacity .2s",
+      }}>{children}</button>
+  );
+}
+function Onboarding({ T, score, onComplete }) {
+  const TOTAL = 5;
+  const [step, setStep] = useState(0);
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [persona, setPersona] = useState(null);
+  const [scope, setScope] = useState("full");
+  const [consented, setConsented] = useState(false);
+  const [linked, setLinked] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [synced, setSynced] = useState(false);
+  const animScore = useCountUp(step === 5 ? score : 0, 1400);
+
+  const toggleBank = (b) => setLinked(linked.includes(b) ? linked.filter((x) => x !== b) : [...linked, b]);
+  const startSync = () => {
+    setSyncing(true);
+    setTimeout(() => { setSyncing(false); setSynced(true); }, 1800);
+  };
+
+  /* Step 0 — Welcome */
+  if (step === 0) return (
+    <ObShell T={T} step={0} total={TOTAL}>
+      <div style={{ textAlign: "center", paddingTop: 40 }}>
+        <div className="floatY" style={{ fontSize: 52, marginBottom: 8 }}>✦</div>
+        <div className="fadeUp" style={{ ...disp, fontSize: 34, fontWeight: 700 }}>FinPilot <span style={{ color: "#A9E8D8" }}>AI</span></div>
+        <div className="fadeUp" style={{ fontSize: 14.5, lineHeight: 1.65, opacity: .88, margin: "12px auto 6px", maxWidth: 300, animationDelay: "120ms" }}>
+          Your financial operating system — every insight grounded in your real numbers, never guessed.
+        </div>
+        <div className="fadeUp" style={{ display: "flex", gap: 14, margin: "20px auto 8px", justifyContent: "center", animationDelay: "240ms" }}>
+          {[["Deterministic math", "◆"], ["Grounded AI", "✦"], ["You own your data", "◉"]].map(([t, i]) => (
+            <div key={t} style={{ fontSize: 11, opacity: .85, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: 88 }}>
+              <span style={{ fontSize: 18 }}>{i}</span>{t}
+            </div>
+          ))}
+        </div>
+        <div className="fadeUp" style={{ animationDelay: "360ms" }}>
+          <ObButton T={T} onClick={() => setStep(1)}>Get started →</ObButton>
+          <ObButton T={T} secondary onClick={() => onComplete("Professional")}>Skip to demo dashboard</ObButton>
+        </div>
+      </div>
+    </ObShell>
+  );
+
+  /* Step 1 — Sign up + OTP (AUTH-001) */
+  if (step === 1) return (
+    <ObShell T={T} step={1} total={TOTAL}>
+      <div className="fadeUp">
+        <div style={{ ...disp, fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Create your account</div>
+        <div style={{ fontSize: 13, opacity: .8, marginBottom: 22, lineHeight: 1.6 }}>We'll send a one-time code to verify it's you. No passwords to remember in this demo.</div>
+        <label style={{ fontSize: 12, fontWeight: 700, opacity: .85 }}>Email</label>
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" type="email" aria-label="Email address"
+          style={{ width: "100%", boxSizing: "border-box", marginTop: 6, border: "1.5px solid rgba(255,255,255,.3)", background: "rgba(255,255,255,.1)", color: "#fff", borderRadius: 12, padding: "13px 15px", fontSize: 15, outline: "none" }} />
+        {email.includes("@") && (
+          <div className="fadeUp" style={{ marginTop: 16 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, opacity: .85 }}>Enter OTP <span style={{ opacity: .6, fontWeight: 400 }}>(demo hint: 1234)</span></label>
+            <input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="••••" maxLength={4} inputMode="numeric" aria-label="One-time password"
+              style={{ width: "100%", boxSizing: "border-box", marginTop: 6, border: "1.5px solid rgba(255,255,255,.3)", background: "rgba(255,255,255,.1)", color: "#fff", borderRadius: 12, padding: "13px 15px", fontSize: 20, letterSpacing: 12, outline: "none", ...mono }} />
+          </div>
+        )}
+        <ObButton T={T} disabled={otp !== "1234"} onClick={() => setStep(2)}>Verify & continue</ObButton>
+        <div style={{ fontSize: 10.5, opacity: .6, marginTop: 12, textAlign: "center" }}>By continuing you accept the Terms of Service & Privacy Policy (AUTH-014)</div>
+      </div>
+    </ObShell>
+  );
+
+  /* Step 2 — Persona (PROF-007, Ticket 1.2) */
+  if (step === 2) return (
+    <ObShell T={T} step={2} total={TOTAL}>
+      <div className="fadeUp">
+        <div style={{ ...disp, fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Which sounds most like you?</div>
+        <div style={{ fontSize: 13, opacity: .8, marginBottom: 20, lineHeight: 1.6 }}>This shapes your dashboard, insights, and the AI's tone — you can change it anytime.</div>
+        {[
+          ["Student", "🎓", "Building first money habits"],
+          ["Professional", "💼", "Salary, investments, EMIs, goals"],
+          ["Retiree", "🌅", "Fixed income & simpler, larger UI"],
+        ].map(([p, icon, desc]) => (
+          <button key={p} onClick={() => setPersona(p)}
+            style={{
+              display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
+              background: persona === p ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.1)",
+              color: persona === p ? T.heroA : "#fff",
+              border: persona === p ? "none" : "1px solid rgba(255,255,255,.25)",
+              borderRadius: 14, padding: "14px 16px", marginBottom: 10, cursor: "pointer", transition: "all .2s",
+            }}>
+            <span style={{ fontSize: 24 }}>{icon}</span>
+            <span><div style={{ fontSize: 15, fontWeight: 800 }}>{PERSONAS[p].label}</div>
+              <div style={{ fontSize: 11.5, opacity: .75 }}>{desc}</div></span>
+          </button>
+        ))}
+        <ObButton T={T} disabled={!persona} onClick={() => setStep(3)}>Continue</ObButton>
+      </div>
+    </ObShell>
+  );
+
+  /* Step 3 — Consent (AUTH-015, Ticket 1.3) */
+  if (step === 3) return (
+    <ObShell T={T} step={3} total={TOTAL}>
+      <div className="fadeUp">
+        <div style={{ ...disp, fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Your data, your rules</div>
+        <div style={{ fontSize: 13, opacity: .85, marginBottom: 18, lineHeight: 1.65 }}>
+          FinPilot uses the regulated Account Aggregator framework. You choose exactly what's shared, it expires automatically, and you can revoke it anytime in Settings.
+        </div>
+        {[
+          ["full", "Balances + full transaction history", "Everything works: budgets, insights, health score"],
+          ["readonly", "Balances only (read-only)", "Limited: net worth works, spending features won't"],
+        ].map(([v, title, desc]) => (
+          <button key={v} onClick={() => setScope(v)}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              background: scope === v ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.1)",
+              color: scope === v ? T.heroA : "#fff",
+              border: scope === v ? "none" : "1px solid rgba(255,255,255,.25)",
+              borderRadius: 14, padding: "13px 16px", marginBottom: 10, cursor: "pointer", transition: "all .2s",
+            }}>
+            <div style={{ fontSize: 14, fontWeight: 800 }}>{title}</div>
+            <div style={{ fontSize: 11.5, opacity: .75, marginTop: 3 }}>{desc}</div>
+          </button>
+        ))}
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: .85, background: "rgba(255,255,255,.08)", borderRadius: 12, padding: "11px 14px", marginTop: 4 }}>
+          <span>Consent validity</span><b>12 months, then renewal ask</b>
+        </div>
+        <button onClick={() => setConsented(!consented)}
+          style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#fff", cursor: "pointer", padding: 0, marginTop: 16, textAlign: "left" }}>
+          <span style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, background: consented ? "#fff" : "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.4)", color: T.heroA, fontWeight: 900, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>{consented ? "✓" : ""}</span>
+          <span style={{ fontSize: 12, lineHeight: 1.5, opacity: .9 }}>I understand what I'm sharing, that it expires, and that I can revoke it anytime.</span>
+        </button>
+        <ObButton T={T} disabled={!consented} onClick={() => setStep(4)}>Grant consent & continue</ObButton>
+      </div>
+    </ObShell>
+  );
+
+  /* Step 4 — Link accounts (FPROF-001, Ticket 1.4) */
+  if (step === 4) return (
+    <ObShell T={T} step={4} total={TOTAL}>
+      <div className="fadeUp">
+        <div style={{ ...disp, fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Link your accounts</div>
+        <div style={{ fontSize: 13, opacity: .8, marginBottom: 18, lineHeight: 1.6 }}>
+          Pick at least one to see your real picture. More accounts = a more truthful Health Score.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {BANKS.map((b) => (
+            <button key={b.name} onClick={() => !synced && toggleBank(b.name)}
+              style={{
+                background: linked.includes(b.name) ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.1)",
+                color: linked.includes(b.name) ? T.heroA : "#fff",
+                border: linked.includes(b.name) ? "none" : "1px solid rgba(255,255,255,.25)",
+                borderRadius: 13, padding: "13px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 750, transition: "all .2s",
+              }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{b.icon}</div>{b.name}
+              {linked.includes(b.name) && <div style={{ fontSize: 10, marginTop: 3 }}>{synced ? "✓ synced" : "selected"}</div>}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, opacity: .65, marginTop: 12, textAlign: "center" }}>Bank not listed? Manual entry & statement upload are always available (FPROF-001-03).</div>
+        {!synced ? (
+          <ObButton T={T} disabled={linked.length === 0 || syncing} onClick={startSync}>
+            {syncing ? "Syncing via Account Aggregator…" : `Link ${linked.length || ""} account${linked.length === 1 ? "" : "s"} securely`}
+          </ObButton>
+        ) : (
+          <ObButton T={T} onClick={() => setStep(5)}>All synced — compute my Health Score →</ObButton>
+        )}
+        {syncing && (
+          <div style={{ display: "flex", gap: 5, justifyContent: "center", marginTop: 14 }}>
+            {[0, 1, 2].map((i) => <span key={i} style={{ width: 7, height: 7, borderRadius: 7, background: "#fff", display: "inline-block", animation: `pulse 1.2s ${i * 0.18}s infinite` }} />)}
+          </div>
+        )}
+      </div>
+    </ObShell>
+  );
+
+  /* Step 5 — First Health Score reveal (the activation moment) */
+  return (
+    <ObShell T={T} step={5} total={TOTAL}>
+      <div className="fadeUp" style={{ textAlign: "center", paddingTop: 30 }}>
+        <div style={{ fontSize: 13, opacity: .85, marginBottom: 8 }}>Based on {linked.length || 2} linked account{linked.length === 1 ? "" : "s"}, here's your</div>
+        <div style={{ ...disp, fontSize: 26, fontWeight: 700, marginBottom: 24 }}>Financial Health Score</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+          <div style={{ position: "relative", width: 190, height: 190 }}>
+            <svg width="190" height="190" style={{ transform: "rotate(-90deg)" }}>
+              <circle cx="95" cy="95" r="82" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="12" />
+              <circle cx="95" cy="95" r="82" fill="none" stroke="#fff" strokeWidth="12"
+                strokeDasharray={2 * Math.PI * 82} strokeDashoffset={2 * Math.PI * 82 * (1 - animScore / 100)} strokeLinecap="round" />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ ...mono, fontSize: 54, fontWeight: 700 }}>{Math.round(animScore)}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#A9E8D8" }}>out of 100</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 13.5, lineHeight: 1.65, opacity: .9, maxWidth: 320, margin: "0 auto" }}>
+          Computed from six pillars of your real data — savings rate, debt, budgets, insurance, diversification, and emergency fund. Every pillar is explorable inside.
+        </div>
+        <ObButton T={T} onClick={() => onComplete(persona || "Professional")}>See what's behind it →</ObButton>
+      </div>
+    </ObShell>
   );
 }
 
@@ -413,7 +614,7 @@ function Home({ F, go, persona }) {
                   <span style={{ fontWeight: 650 }}>{b.icon} {b.cat}</span>
                   <span style={{ ...mono, fontWeight: 750, color: pct >= 100 ? T.danger : T.ink }}>{Math.round(pct)}%</span>
                 </div>
-                <Bar pct={pct} />
+                <Meter pct={pct} />
               </div>
             );
           })}
@@ -458,7 +659,7 @@ function Home({ F, go, persona }) {
             {GOALS.map((g) => (
               <div key={g.name} onClick={() => go("goals")} style={{ minWidth: 158, background: T.wash, borderRadius: 13, padding: 12, cursor: "pointer" }}>
                 <div style={{ fontSize: 13, fontWeight: 750 }}>{g.icon} {g.name}</div>
-                <div style={{ margin: "9px 0 5px" }}><Bar pct={(g.saved / g.target) * 100} height={6} /></div>
+                <div style={{ margin: "9px 0 5px" }}><Meter pct={(g.saved / g.target) * 100} height={6} /></div>
                 <div style={{ fontSize: 11, color: T.sub, ...mono }}>{fmtL(g.saved)} / {fmtL(g.target)}</div>
               </div>
             ))}
@@ -509,7 +710,7 @@ function Money({ F }) {
             {visible.map((t, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${T.wash}`, gap: 12 }}>
                 <div style={{ width: 37, height: 37, borderRadius: 12, background: t.amt > 0 ? T.successSoft : T.wash, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
-                  {t.amt > 0 ? "↑" : BUDGETS.find((b) => b.cat === t.cat)?.icon || "•"}
+                  {t.amt > 0 ? "↓" : BUDGETS.find((b) => b.cat === t.cat)?.icon || "•"}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 680, whiteSpace: "nowrap", overflow: "hidden", textOverflowEllipsis: "ellipsis", textOverflow: "ellipsis" }}>
@@ -544,7 +745,7 @@ function Money({ F }) {
                   <span>{b.icon} {b.cat} {pct >= 100 && <Chip tone="danger">over</Chip>}{pct >= 80 && pct < 100 && <Chip tone="warn">80%</Chip>}</span>
                   <span style={mono}>{fmt(b.spent)} <span style={{ color: T.sub, fontWeight: 400 }}>/ {fmt(b.budget)}</span></span>
                 </div>
-                <Bar pct={pct} />
+                <Meter pct={pct} />
               </Card>
             );
           })}
@@ -574,7 +775,7 @@ function Money({ F }) {
                   <XAxis dataKey="m" tick={{ fontSize: 11, fill: T.sub }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   <Tooltip formatter={(v) => fmt(v)} contentStyle={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, color: T.ink }} />
-                  <RechartsBar dataKey="amt" fill={T.brand} radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="amt" fill={T.brand} radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -751,7 +952,7 @@ function Wealth({ F }) {
               <span>Covered: <b style={mono}>{fmtL(INSURANCE.life.cover)}</b></span>
               <span>Benchmark: <b style={mono}>{fmtL(F.gaps.lifeB)}</b><Explain text={`15× annual usable income (${fmtL(F.usable * 12)}) + outstanding liabilities (${fmtL(F.loanBal)}). Fully transparent — no black box.`} /></span>
             </div>
-            <Bar pct={(INSURANCE.life.cover / F.gaps.lifeB) * 100} />
+            <Meter pct={(INSURANCE.life.cover / F.gaps.lifeB) * 100} />
             <div style={{ fontSize: 13.5, color: T.danger, fontWeight: 800, marginTop: 9 }}>Gap: {fmtL(F.gaps.lifeGap)}</div>
           </Card>
           <Card delay={60} alert={F.gaps.healthGap > 0 ? "warn" : undefined}>
@@ -760,7 +961,7 @@ function Wealth({ F }) {
               <span>Covered: <b style={mono}>{fmtL(INSURANCE.health.cover)}</b></span>
               <span>Benchmark: <b style={mono}>{fmtL(F.gaps.healthB)}</b><Explain text="₹5L per family member (you + 2 dependents), metro city tier." /></span>
             </div>
-            <Bar pct={(INSURANCE.health.cover / F.gaps.healthB) * 100} />
+            <Meter pct={(INSURANCE.health.cover / F.gaps.healthB) * 100} />
             {F.gaps.healthGap > 0 && <div style={{ fontSize: 13.5, color: T.warn, fontWeight: 800, marginTop: 9 }}>Gap: {fmtL(F.gaps.healthGap)}</div>}
           </Card>
           <div className="fadeUp" style={{ background: T.cardAlt, border: `1.5px dashed ${T.line}`, borderRadius: 15, padding: 14, animationDelay: "120ms" }}>
@@ -806,7 +1007,7 @@ function Goals({ F }) {
   ];
   return (
     <div>
-      <SubTabs tabs={["Health Score", "Simulator", "Goals"]} tab={tab} setTab={setTab} />
+      <SubTabs tabs={["Health Score", "Simulator", "Peers", "Goals"]} tab={tab} setTab={setTab} />
       {tab === "Health Score" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Card style={{ display: "flex", gap: 20, alignItems: "center" }}>
@@ -826,7 +1027,7 @@ function Goals({ F }) {
                   <span style={{ fontWeight: 650 }}>{meta[k][0]} <span style={{ fontSize: 10, color: T.sub }}>({Math.round(F.health.weights[k] * 100)}%)</span><Explain text={meta[k][1]} /></span>
                   <span style={{ ...mono, fontWeight: 750 }}>{Math.round(v)}</span>
                 </div>
-                <Bar pct={v} height={6} />
+                <Meter pct={v} height={6} />
               </div>
             ))}
           </Card>
@@ -891,7 +1092,7 @@ function Goals({ F }) {
                   <div style={{ fontSize: 15, fontWeight: 800, ...disp }}>{g.icon} {g.name}</div>
                   <Chip tone={tone}>{f.state}</Chip>
                 </div>
-                <div style={{ margin: "12px 0 7px" }}><Bar pct={(g.saved / g.target) * 100} /></div>
+                <div style={{ margin: "12px 0 7px" }}><Meter pct={(g.saved / g.target) * 100} /></div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.sub }}>
                   <span style={mono}>{fmtL(g.saved)} / {fmtL(g.target)}</span><span>by {g.targetDate}</span>
                 </div>
@@ -903,6 +1104,114 @@ function Goals({ F }) {
             );
           })}
         </div>
+      )}
+
+      {tab === "Peers" && <Bench F={F} />}
+    </div>
+  );
+}
+
+/* ================================================================
+   BENCHMARKING & PEER COMPARISON — Epic 8 (M34)
+   Cohort engine (BENCH-001) · minimum-cohort-size fail-closed
+   safeguard (002) · single global opt-in (003) · Health Score
+   percentile (004/FHS-006) · spend / allocation / DTI benchmarks
+   (005/007/008) — social context, never judgment
+   ================================================================ */
+const MIN_COHORT = 50;
+function PercentileBar({ pct, label }) {
+  const T = useT();
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ position: "relative", height: 10, borderRadius: 20, background: `linear-gradient(90deg, ${T.dangerSoft}, ${T.warnSoft}, ${T.successSoft})` }}>
+        <div style={{ position: "absolute", top: -3, left: `calc(${Math.min(97, pct)}% - 8px)`, width: 16, height: 16, borderRadius: "50%", background: T.brand, border: `3px solid ${T.card}`, boxShadow: "0 1px 5px rgba(0,0,0,.3)", transition: "left .6s cubic-bezier(.22,1,.36,1)" }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: T.sub, marginTop: 5, fontWeight: 700 }}>
+        <span>peers' lower range</span><span style={{ color: T.brand, fontSize: 11 }}>{label}</span><span>peers' upper range</span>
+      </div>
+    </div>
+  );
+}
+function Bench({ F }) {
+  const T = useT();
+  const [optIn, setOptIn] = useState(true);
+  const [narrow, setNarrow] = useState(false); // "same sector" refinement demo
+  const cohortN = narrow ? 43 : 4218;
+  const tooSmall = cohortN < MIN_COHORT;
+
+  const benches = [
+    { label: "Financial Health Score", you: `${F.health.score}`, pct: 72, note: "72nd percentile — better than ~7 in 10 similar users (FHS-006)" },
+    { label: "Savings rate", you: `${Math.round(F.sr * 100)}%`, pct: 64, note: "Peers' median is 14% — you're comfortably above it" },
+    { label: "Dining Out spend", you: fmt(9350), pct: 58, note: "Slightly above the peer median of ₹8,100/mo — context, not criticism (BENCH-005)" },
+    { label: "Debt-to-income", you: `${Math.round(F.dti * 100)}%`, pct: 61, note: "Lower is better here — you carry less EMI load than ~61% of peers (BENCH-008)" },
+    { label: "Equity allocation", you: `${Math.round((F.alloc["Equity MF"] / F.invValue) * 100)}%`, pct: 55, note: "In line with Moderate-risk peers (BENCH-007)" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Global opt-in (BENCH-003) */}
+      <Card onClick={() => setOptIn(!optIn)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 750 }}>Peer comparison</div>
+          <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>One switch covers every benchmark, everywhere (BENCH-003). Your data joins cohorts only anonymized & aggregated.</div>
+        </div>
+        <div style={{ width: 46, height: 26, borderRadius: 20, background: optIn ? T.brand : T.wash, position: "relative", transition: "background .2s", flexShrink: 0 }}>
+          <div style={{ position: "absolute", top: 3, left: optIn ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transition: "left .2s" }} />
+        </div>
+      </Card>
+
+      {!optIn ? (
+        <Card style={{ textAlign: "center", padding: 26 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>🔒</div>
+          <div style={{ fontSize: 13.5, fontWeight: 750 }}>Benchmarking is off</div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 6, lineHeight: 1.6, maxWidth: 300, margin: "6px auto 0" }}>
+            Nothing about you is compared or contributed while this is off. Every deterministic feature works exactly the same — comparison is always optional context, never required.
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* Cohort definition (BENCH-001) */}
+          <Card delay={50}>
+            <Label>Your comparison cohort (BENCH-001)</Label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              {["Working Professional", "Age 30–35", "Metro city", "₹12–18L/yr income"].map((c) => <Chip key={c}>{c}</Chip>)}
+              <button onClick={() => setNarrow(!narrow)}
+                style={{ border: `1.5px dashed ${narrow ? T.brand : T.line}`, background: narrow ? T.brandSoft : "none", color: narrow ? T.brand : T.sub, fontSize: 11, fontWeight: 750, borderRadius: 20, padding: "3px 10px", cursor: "pointer" }}>
+                {narrow ? "✓" : "+"} same industry sector
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: T.sub, marginTop: 10 }}>
+              Cohort size: <b style={{ ...mono, color: tooSmall ? T.danger : T.ink }}>{cohortN.toLocaleString("en-IN")}</b> anonymized users
+            </div>
+          </Card>
+
+          {/* Fail-closed safeguard (BENCH-002) */}
+          {tooSmall ? (
+            <Card delay={90} alert="danger" style={{ textAlign: "center", padding: 24 }}>
+              <div style={{ fontSize: 26, marginBottom: 8 }}>🛡️</div>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: T.danger }}>Cohort too small — benchmarks hidden (BENCH-002)</div>
+              <div style={{ fontSize: 12, color: T.sub, marginTop: 8, lineHeight: 1.65, maxWidth: 320, margin: "8px auto 0" }}>
+                Only {cohortN} users match this refined cohort — below the {MIN_COHORT}-user privacy floor. Showing a comparison this narrow could risk identifying real individuals, so FinPilot <b>fails closed</b>: no benchmark is ever shown from an under-sized cohort. Remove the refinement to see benchmarks again.
+              </div>
+            </Card>
+          ) : (
+            <>
+              {benches.map((b, i) => (
+                <Card key={b.label} delay={90 + i * 50}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 750 }}>{b.label}</div>
+                    <div style={{ ...mono, fontWeight: 750, fontSize: 15 }}>{b.you}</div>
+                  </div>
+                  <PercentileBar pct={b.pct} label={`${b.pct}th percentile`} />
+                  <div style={{ fontSize: 11.5, color: T.sub, marginTop: 8, lineHeight: 1.5 }}>{b.note}</div>
+                </Card>
+              ))}
+              <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", lineHeight: 1.6, padding: "0 16px" }}>
+                Peer context sits alongside — never replaces — your deterministic analysis. Being "above peers" who are under-insured is not the same as being adequately insured (BENCH-006 principle).
+              </div>
+            </>
+          )}
+        </>
       )}
     </div>
   );
@@ -1042,9 +1351,821 @@ function Coach({ F }) {
 }
 
 /* ================================================================
+   HOUSEHOLD MANAGEMENT — Epic 6 (M32)
+   Members & roles · consent-scoped sharing · shared budget with
+   per-member contributions · joint goal ledger · family calendar ·
+   household emergency-fund adequacy (HH-001…011)
+   ================================================================ */
+const HOUSEHOLD = {
+  name: "Mehta Household",
+  members: [
+    { id: "arjun", name: "Arjun Mehta", role: "Admin · Adult", avatar: "AM", you: true, shares: { budgets: true, netWorth: true, goals: true } },
+    { id: "priya", name: "Priya Mehta", role: "Adult Member", avatar: "PM", shares: { budgets: true, netWorth: false, goals: true } },
+    { id: "aarav", name: "Aarav (age 9)", role: "Dependent · linked profile, no login", avatar: "A", dependent: true },
+  ],
+  invitePending: { name: "Ravi Mehta (father)", note: "Multi-generational invite sent · awaiting consent" },
+  sharedBudgets: [
+    { cat: "Groceries", icon: "🛒", budget: 24000, contrib: { arjun: 9800, priya: 7100 } },
+    { cat: "Utilities", icon: "💡", budget: 9000, contrib: { arjun: 5200, priya: 2900 } },
+    { cat: "Kids & Education", icon: "🎒", budget: 15000, contrib: { arjun: 6500, priya: 6400 } },
+  ],
+  jointGoal: {
+    name: "Family Europe Trip", icon: "✈️", target: 450000, targetDate: "May 2027",
+    ledger: [
+      { who: "arjun", amt: 128000 }, { who: "priya", amt: 96000 },
+    ],
+  },
+  calendar: [
+    { d: "Jul 5", what: "Aarav — school fees", amt: 18500, who: "shared", type: "bill" },
+    { d: "Jul 8", what: "iCloud+ (shared plan)", amt: 75, who: "arjun", type: "bill" },
+    { d: "Jul 12", what: "Home loan EMI", amt: 36600, who: "arjun", type: "emi" },
+    { d: "Jul 18", what: "Europe Trip — monthly contribution due", amt: 15000, who: "shared", type: "goal" },
+    { d: "Jul 25", what: "Priya — term policy premium", amt: 2100, who: "priya", type: "bill" },
+  ],
+  combinedMonthlyExpenses: 118000,
+  combinedEmergencyFund: 512000,
+};
+function Household({ F }) {
+  const T = useT();
+  const [tab, setTab] = useState("Members");
+  const [members, setMembers] = useState(HOUSEHOLD.members);
+  const memberById = (id) => members.find((m) => m.id === id);
+  const toggleShare = (id, key) =>
+    setMembers(members.map((m) => (m.id === id ? { ...m, shares: { ...m.shares, [key]: !m.shares[key] } } : m)));
+  const priyaShares = memberById("priya").shares;
+  const efMonths = HOUSEHOLD.combinedEmergencyFund / HOUSEHOLD.combinedMonthlyExpenses;
+  const jg = HOUSEHOLD.jointGoal;
+  const jgSaved = jg.ledger.reduce((s, l) => s + l.amt, 0);
+
+  return (
+    <div>
+      <div className="fadeUp" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <div style={{ ...disp, fontSize: 18, fontWeight: 700 }}>⌂ {HOUSEHOLD.name}</div>
+          <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>Each member owns their data — sharing is consented, scoped & revocable (HH-001)</div>
+        </div>
+      </div>
+      <SubTabs tabs={["Members", "Shared Budget", "Joint Goal", "Calendar", "Life Events"]} tab={tab} setTab={setTab} />
+
+      {tab === "Members" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {members.map((m, i) => (
+            <Card key={m.id} delay={i * 55}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ width: 42, height: 42, borderRadius: "50%", background: m.dependent ? T.warnSoft : T.brandSoft, color: m.dependent ? T.warn : T.brand, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{m.avatar}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 750 }}>{m.name} {m.you && <Chip tone="success">you</Chip>}</div>
+                  <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>{m.role}</div>
+                </div>
+              </div>
+              {m.shares && !m.you && (
+                <div style={{ marginTop: 12, borderTop: `1px solid ${T.wash}`, paddingTop: 10 }}>
+                  <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 8 }}>Shares with household (their choice, demo-togglable)</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {["budgets", "netWorth", "goals"].map((k) => (
+                      <button key={k} onClick={() => toggleShare(m.id, k)}
+                        style={{ border: "none", borderRadius: 20, padding: "6px 13px", fontSize: 11.5, fontWeight: 750, cursor: "pointer", background: m.shares[k] ? T.successSoft : T.wash, color: m.shares[k] ? T.success : T.sub }}>
+                        {m.shares[k] ? "✓" : "✕"} {k === "netWorth" ? "Net worth" : k[0].toUpperCase() + k.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {m.dependent && (
+                <div style={{ marginTop: 10, fontSize: 12, background: T.wash, borderRadius: 10, padding: "9px 12px", lineHeight: 1.5 }}>
+                  🎒 Education stage: <b>Primary school</b> — feeds education-goal sizing (HH-006). Pocket-money tracker available (HH-008).
+                </div>
+              )}
+            </Card>
+          ))}
+          <Card delay={200} style={{ borderStyle: "dashed", background: T.cardAlt }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 750 }}>⏳ {HOUSEHOLD.invitePending.name}</div>
+                <div style={{ fontSize: 11, color: T.sub, marginTop: 3 }}>{HOUSEHOLD.invitePending.note} (HH-002)</div>
+              </div>
+              <button style={{ background: "none", border: `1px solid ${T.line}`, color: T.sub, borderRadius: 9, padding: "7px 12px", fontSize: 11.5, fontWeight: 750, cursor: "pointer" }}>Resend</button>
+            </div>
+          </Card>
+          <Card delay={260} alert={efMonths < 6 ? "warn" : undefined}>
+            <Label>Household emergency fund (HH-010)</Label>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 6 }}>
+              <Num size={22}>{efMonths.toFixed(1)} months</Num>
+              <span style={{ fontSize: 11.5, color: T.sub }}>of combined household expenses · target 6</span>
+              <Explain text={`Combined fund ${fmtL(HOUSEHOLD.combinedEmergencyFund)} ÷ combined monthly expenses ${fmtL(HOUSEHOLD.combinedMonthlyExpenses)} — sized to the household, not any one member, which is a materially different (and more accurate) calculation.`} />
+            </div>
+            <div style={{ marginTop: 8 }}><Meter pct={(efMonths / 6) * 100} /></div>
+          </Card>
+          <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", padding: "4px 20px", lineHeight: 1.6, animationDelay: "320ms" }}>
+            Different spending styles are normal — FinPilot shows shared numbers neutrally and never takes sides (HH-011).
+          </div>
+        </div>
+      )}
+
+      {tab === "Shared Budget" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {!priyaShares.budgets && (
+            <div className="fadeUp" style={{ background: T.warnSoft, border: `1px solid ${T.warn}40`, color: T.warn, borderRadius: 12, padding: "10px 14px", fontSize: 12.5, fontWeight: 700 }}>
+              Priya has paused budget sharing — her contributions are hidden below. Sharing is always each member's own choice.
+            </div>
+          )}
+          {HOUSEHOLD.sharedBudgets.map((b, i) => {
+            const arjun = b.contrib.arjun;
+            const priya = priyaShares.budgets ? b.contrib.priya : null;
+            const total = arjun + (priya ?? 0);
+            const pct = (total / b.budget) * 100;
+            return (
+              <Card key={b.cat} delay={i * 60}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, marginBottom: 7 }}>
+                  <span>{b.icon} {b.cat}</span>
+                  <span style={mono}>{fmt(total)} <span style={{ color: T.sub, fontWeight: 400 }}>/ {fmt(b.budget)}</span></span>
+                </div>
+                <Meter pct={pct} />
+                <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 12 }}>
+                  <span><span style={{ color: T.brand, fontWeight: 800 }}>●</span> Arjun <b style={mono}>{fmt(arjun)}</b></span>
+                  <span>
+                    <span style={{ color: "#8A6FBF", fontWeight: 800 }}>●</span> Priya{" "}
+                    {priya !== null ? <b style={mono}>{fmt(priya)}</b> : <i style={{ color: T.sub }}>hidden by choice</i>}
+                  </span>
+                </div>
+              </Card>
+            );
+          })}
+          <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", lineHeight: 1.6, padding: "0 16px" }}>
+            Shared categories are co-funded on top of each member's private budgets (BUD-012) — personal spending stays personal.
+          </div>
+        </div>
+      )}
+
+      {tab === "Joint Goal" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, ...disp }}>{jg.icon} {jg.name}</div>
+              <Chip tone="success">household goal</Chip>
+            </div>
+            <div style={{ margin: "12px 0 7px" }}><Meter pct={(jgSaved / jg.target) * 100} /></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: T.sub }}>
+              <span style={mono}>{fmtL(jgSaved)} / {fmtL(jg.target)}</span><span>by {jg.targetDate}</span>
+            </div>
+          </Card>
+          <Card delay={60}>
+            <Label>Contribution ledger (HH-004 / GOAL-012)</Label>
+            {jg.ledger.map((l) => {
+              const m = memberById(l.who);
+              const share = Math.round((l.amt / jgSaved) * 100);
+              return (
+                <div key={l.who} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0", borderBottom: `1px solid ${T.wash}` }}>
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: T.brandSoft, color: T.brand, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12 }}>{m.avatar}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{m.name.split(" ")[0]}</div>
+                    <div style={{ marginTop: 5, width: "100%" }}><Meter pct={share} height={5} /></div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ ...mono, fontWeight: 750, fontSize: 13.5 }}>{fmtL(l.amt)}</div>
+                    <div style={{ fontSize: 10.5, color: T.sub }}>{share}% of saved</div>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ fontSize: 11, color: T.sub, marginTop: 10, lineHeight: 1.55 }}>
+              Per-member transparency avoids "who's actually paying in" ambiguity — shown factually, never judgmentally.
+            </div>
+          </Card>
+          <Card delay={120} ai>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 7 }}><AIBadge /><Label>Household insight</Label></div>
+            <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+              At the current combined pace of <b style={mono}>₹15,000/mo</b>, this goal lands ~2 months late. Splitting one extra <b style={mono}>₹3,500/mo</b> between members would bring it back on schedule.
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "Calendar" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            {HOUSEHOLD.calendar.map((e, i) => {
+              const m = e.who !== "shared" ? memberById(e.who) : null;
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: `1px solid ${T.wash}` }}>
+                  <div style={{ width: 44, textAlign: "center", flexShrink: 0 }}>
+                    <div style={{ ...mono, fontSize: 15, fontWeight: 700 }}>{e.d.split(" ")[1]}</div>
+                    <div style={{ fontSize: 9.5, color: T.sub, fontWeight: 800, letterSpacing: ".08em" }}>JUL</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{e.what}</div>
+                    <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>
+                      {e.who === "shared" ? "Shared household item" : `${m.name.split(" ")[0]}'s item`}
+                      {" · "}{e.type === "emi" ? "EMI" : e.type === "goal" ? "goal contribution" : "bill"}
+                    </div>
+                  </div>
+                  <div style={{ ...mono, fontWeight: 750, fontSize: 13.5 }}>{fmt(e.amt)}</div>
+                </div>
+              );
+            })}
+          </Card>
+          <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", lineHeight: 1.6, padding: "0 16px" }}>
+            One shared view of upcoming money events (HH-005) — so no one partner carries the whole coordination load. Individual alerts still route only to their owner (NOTIF-009).
+          </div>
+        </div>
+      )}
+
+      {tab === "Life Events" && <LifeEvents />}
+    </div>
+  );
+}
+
+/* ================================================================
+   LIFE EVENTS & MILESTONES — Epic 9 (M35)
+   Manual declaration (LIFE-001) · consent-gated detection (002) ·
+   timeline vs net worth (003) · coordinated workflows (004–009)
+   delivered as one bundle, never a flurry (NOTIF-010)
+   ================================================================ */
+const EVENT_TYPES = [
+  { key: "job", icon: "💼", label: "New job / raise", workflow: [
+    ["Recalculate budgets & usable income", "Income smoothing re-runs with your new salary (INC-016)"],
+    ["Review employer benefits & insurance", "New group cover may close part of your gap (INS-010)"],
+    ["Re-check your persona settings", "A big income change often shifts what matters (PROF-007)"],
+  ]},
+  { key: "child", icon: "👶", label: "New child", workflow: [
+    ["Re-run insurance coverage gap", "Family size changes the health benchmark immediately (INS-003)"],
+    ["Suggested: Education goal", "Sized to your dependent's stage — starts as a draft (GOAL-001)"],
+    ["Add as household dependent", "Linked profile, no login, parent-controlled (HH-006)"],
+  ]},
+  { key: "marriage", icon: "💍", label: "Marriage / partnership", workflow: [
+    ["Set up your Household", "Invite your partner — sharing stays each person's choice (HH-001)"],
+    ["Suggested: first joint goal", "A shared target is the most natural starting point (HH-004)"],
+    ["Update insurance nominees", "The most-forgotten task after marriage (INS-009)"],
+  ]},
+  { key: "home", icon: "🏠", label: "Home purchase", workflow: [
+    ["Add your home loan", "EMI, DTI, and prepayment simulator activate (LOAN-001)"],
+    ["Mark 'Home' goal achieved 🎉", "Your down-payment goal closes with a retrospective (GOAL-004)"],
+    ["Recompute net worth composition", "Property shifts your liquid/illiquid split (NW-008)"],
+  ]},
+  { key: "move", icon: "📦", label: "Relocation", workflow: [
+    ["Update city tier", "Cost-of-living benchmarks re-derive, not just re-label (PROF-006)"],
+    ["Re-check health-cover benchmark", "Metro vs tier-2 changes the recommended sum insured (INS-003)"],
+  ]},
+  { key: "retire", icon: "🌅", label: "Retirement", workflow: [
+    ["Switch to Retiree persona & Senior Mode", "Larger text, simpler dashboard (PROF-007)"],
+    ["Shift to decumulation view", "Net worth reframes from growth to sustainable drawdown (NW-*)"],
+    ["Set up pension/annuity income", "Fixed income needs different handling than salary (INC-013)"],
+  ]},
+];
+const PAST_EVENTS = [
+  { d: "Mar 2026", icon: "📈", what: "Salary raise detected & confirmed", note: "Income +16% · budgets recalculated" },
+  { d: "Aug 2025", icon: "🛟", what: "Emergency Fund goal started", note: "After AI briefing flagged 1.9-month coverage" },
+  { d: "Jun 2023", icon: "🏠", what: "Home loan started", note: "₹42L @ 8.6% · 20 years" },
+];
+function LifeEvents() {
+  const T = useT();
+  const [declaring, setDeclaring] = useState(null);
+  const [done, setDone] = useState({});
+  const [timeline, setTimeline] = useState(PAST_EVENTS);
+  const [detection, setDetection] = useState(true);
+  const ev = EVENT_TYPES.find((e) => e.key === declaring);
+
+  const act = (i, choice) => setDone({ ...done, [declaring + i]: choice });
+  const finishDeclare = () => {
+    setTimeline([{ d: "Jul 2026", icon: ev.icon, what: ev.label + " — declared", note: "Workflow bundle reviewed" }, ...timeline]);
+    setDeclaring(null); setDone({});
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {detection && !declaring && (
+        <Card ai>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 7 }}><AIBadge /><Label>Possible life event noticed (LIFE-002)</Label></div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+            Your income has held <b style={mono}>~16% higher</b> for 3 straight months. New job or raise? FinPilot never acts on a guess — only if you confirm.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button onClick={() => { setDetection(false); setDeclaring("job"); }}
+              style={{ background: `linear-gradient(135deg, ${T.ai}, ${T.aiDeep})`, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", boxShadow: T.glowAI }}>
+              Yes — start the new-job checklist
+            </button>
+            <button onClick={() => setDetection(false)} style={{ background: "none", color: T.sub, border: `1px solid ${T.line}`, borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 750, cursor: "pointer" }}>Not now</button>
+          </div>
+        </Card>
+      )}
+
+      {!declaring ? (
+        <>
+          <Card>
+            <Label>Something changed? Tell FinPilot (LIFE-001)</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
+              {EVENT_TYPES.map((e) => (
+                <button key={e.key} onClick={() => setDeclaring(e.key)}
+                  style={{ background: T.wash, border: "none", borderRadius: 13, padding: "13px 6px", cursor: "pointer", color: T.ink, transition: "transform .15s" }}
+                  onMouseEnter={(x) => (x.currentTarget.style.transform = "translateY(-2px)")}
+                  onMouseLeave={(x) => (x.currentTarget.style.transform = "none")}>
+                  <div style={{ fontSize: 22, marginBottom: 5 }}>{e.icon}</div>
+                  <div style={{ fontSize: 11, fontWeight: 750, lineHeight: 1.3 }}>{e.label}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 10.5, color: T.sub, marginTop: 12, lineHeight: 1.55 }}>
+              One declared event triggers one coordinated bundle across Insurance, Goals, Budget & Household — never a flurry of disjointed alerts (NOTIF-010).
+            </div>
+          </Card>
+
+          <Card delay={80}>
+            <Label>Your life-event timeline (LIFE-003)</Label>
+            <div style={{ fontSize: 11, color: T.sub, margin: "6px 0 4px" }}>Viewed alongside your net-worth trend, these explain the "why" behind the chart's turns.</div>
+            <div style={{ position: "relative", marginTop: 12, paddingLeft: 18 }}>
+              <div style={{ position: "absolute", left: 5, top: 6, bottom: 6, width: 2, background: T.line, borderRadius: 2 }} />
+              {timeline.map((e, i) => (
+                <div key={i} className="fadeUp" style={{ position: "relative", paddingBottom: i === timeline.length - 1 ? 0 : 18, animationDelay: i * 60 + "ms" }}>
+                  <div style={{ position: "absolute", left: -18, top: 3, width: 12, height: 12, borderRadius: "50%", background: T.brand, border: `2.5px solid ${T.card}`, boxShadow: `0 0 0 2px ${T.brand}44` }} />
+                  <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 800, letterSpacing: ".06em", ...mono }}>{e.d}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 750, marginTop: 2 }}>{e.icon} {e.what}</div>
+                  <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2 }}>{e.note}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </>
+      ) : (
+        <Card ai>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, ...disp }}>{ev.icon} {ev.label}</div>
+            <button onClick={() => { setDeclaring(null); setDone({}); }} style={{ background: "none", border: "none", color: T.sub, fontSize: 12, fontWeight: 750, cursor: "pointer" }}>✕ cancel</button>
+          </div>
+          <div style={{ fontSize: 12, color: T.sub, margin: "6px 0 12px", lineHeight: 1.55 }}>
+            One coordinated checklist — review each item independently; nothing happens without your OK.
+          </div>
+          {ev.workflow.map(([title, desc], i) => {
+            const state = done[declaring + i];
+            return (
+              <div key={i} style={{ borderTop: `1px solid ${T.wash}`, padding: "12px 0" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 750 }}>{i + 1}. {title}</div>
+                <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{desc}</div>
+                <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
+                  {!state ? (
+                    <>
+                      <button onClick={() => act(i, "done")} style={{ background: T.brand, color: "#fff", border: "none", borderRadius: 9, padding: "7px 14px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>Review & apply</button>
+                      <button onClick={() => act(i, "later")} style={{ background: "none", color: T.sub, border: `1px solid ${T.line}`, borderRadius: 9, padding: "7px 14px", fontSize: 11.5, fontWeight: 750, cursor: "pointer" }}>Later</button>
+                    </>
+                  ) : (
+                    <Chip tone={state === "done" ? "success" : "neutral"}>{state === "done" ? "✓ applied" : "deferred — we'll gently remind you"}</Chip>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={finishDeclare} disabled={ev.workflow.some((_, i) => !done[declaring + i])}
+            style={{
+              width: "100%", marginTop: 12, background: ev.workflow.some((_, i) => !done[declaring + i]) ? T.wash : `linear-gradient(135deg, ${T.ai}, ${T.aiDeep})`,
+              color: ev.workflow.some((_, i) => !done[declaring + i]) ? T.sub : "#fff",
+              border: "none", borderRadius: 12, padding: "12px 16px", fontSize: 13, fontWeight: 800,
+              cursor: ev.workflow.some((_, i) => !done[declaring + i]) ? "default" : "pointer", transition: "all .25s",
+            }}>
+            {ev.workflow.some((_, i) => !done[declaring + i]) ? "Decide on each item to finish" : "Finish — add to my timeline"}
+          </button>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+
+/* ================================================================
+   AUTOMATION & RULES ENGINE — Epic 7 (M33)
+   IF-this-THEN-that builder (AUTO-001) · auto-tag (002) ·
+   auto-goal-contribution (003) · audit log (006) · conflict
+   detection (007) · bulk pause (008) · AI suggestions (009)
+   ================================================================ */
+const TRIGGERS = [
+  "A transaction from [Netflix] arrives",
+  "Dining Out crosses 80% of budget",
+  "Salary credit is detected",
+  "Freelance income is received",
+  "A subscription price increases",
+];
+const ACTIONS = [
+  "Tag it #entertainment",
+  "Send me a notification",
+  "Move 10% to Emergency Fund goal",
+  "Move 5% to Goa Vacation goal",
+  "Pause non-critical alerts for that category",
+];
+const INITIAL_RULES = [
+  { id: 1, when: "Freelance income is received", then: "Move 10% to Emergency Fund goal", on: true, fired: 4, kind: "goal" },
+  { id: 2, when: "A transaction from [RZP*KIRANA STORE] arrives", then: "Categorize as Groceries", on: true, fired: 7, kind: "category" },
+  { id: 3, when: "Dining Out crosses 80% of budget", then: "Send me a notification", on: true, fired: 2, kind: "alert" },
+  { id: 4, when: "A transaction from [Blue Tokai Coffee] arrives", then: "Tag it #treats", on: false, fired: 11, kind: "tag" },
+  { id: 5, when: "A transaction from [Blue Tokai Coffee] arrives", then: "Tag it #work", on: true, fired: 3, kind: "tag", conflict: 4 },
+];
+const INITIAL_LOG = [
+  { t: "Today 09:12", rule: "Freelance income → 10% to Emergency Fund", did: "Moved ₹2,300 to Emergency Fund goal" },
+  { t: "Yesterday 18:40", rule: "RZP*KIRANA → Groceries", did: "Auto-categorized ₹890 transaction" },
+  { t: "Jun 27, 21:05", rule: "Dining 80% alert", did: "Notification sent — Dining Out reached 82%" },
+  { t: "Jun 24, 10:02", rule: "Freelance income → 10% to Emergency Fund", did: "Moved ₹1,150 to Emergency Fund goal" },
+];
+function Rules({ F }) {
+  const T = useT();
+  const [tab, setTab] = useState("My Rules");
+  const [rules, setRules] = useState(INITIAL_RULES);
+  const [log, setLog] = useState(INITIAL_LOG);
+  const [allPaused, setAllPaused] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [newWhen, setNewWhen] = useState(TRIGGERS[0]);
+  const [newThen, setNewThen] = useState(ACTIONS[0]);
+  const [suggestion, setSuggestion] = useState(true);
+
+  const toggleRule = (id) => setRules(rules.map((r) => (r.id === id ? { ...r, on: !r.on } : r)));
+  const deleteRule = (id) => setRules(rules.filter((r) => r.id !== id));
+  const createRule = (when, then) => {
+    const r = { id: Date.now(), when, then, on: true, fired: 0, kind: "custom" };
+    setRules([r, ...rules]);
+    setLog([{ t: "Just now", rule: `${when} → ${then}`, did: "Rule created — will act on the next matching event" }, ...log]);
+    setBuilding(false);
+  };
+  const conflictPairs = rules.filter((r) => r.conflict && r.on && rules.find((x) => x.id === r.conflict)?.on);
+
+  return (
+    <div>
+      <div className="fadeUp" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <div style={{ ...disp, fontSize: 18, fontWeight: 700 }}>⚡ Automation</div>
+          <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>Rules act only within your consent — and every action is logged (AUTO-006)</div>
+        </div>
+      </div>
+      <SubTabs tabs={["My Rules", "Audit Log", "Suggested"]} tab={tab} setTab={setTab} />
+
+      {tab === "My Rules" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Bulk pause (AUTO-008) */}
+          <Card style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} onClick={() => setAllPaused(!allPaused)}>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 750 }}>Pause all automations</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>A safety valve for "manual review" periods — nothing is deleted (AUTO-008)</div>
+            </div>
+            <div style={{ width: 46, height: 26, borderRadius: 20, background: allPaused ? T.warn : T.wash, position: "relative", transition: "background .2s", flexShrink: 0 }}>
+              <div style={{ position: "absolute", top: 3, left: allPaused ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transition: "left .2s" }} />
+            </div>
+          </Card>
+
+          {/* Conflict detection (AUTO-007) */}
+          {conflictPairs.length > 0 && !allPaused && (
+            <div className="fadeUp" style={{ background: T.warnSoft, border: `1px solid ${T.warn}45`, color: T.warn, borderRadius: 13, padding: "11px 14px", fontSize: 12.5, fontWeight: 700, lineHeight: 1.55 }}>
+              ⚠ Rule conflict detected (AUTO-007): two active rules tag <b>Blue Tokai Coffee</b> differently (#treats vs #work). The newer rule currently wins — disable one to resolve.
+            </div>
+          )}
+
+          {/* Builder (AUTO-001) */}
+          {!building ? (
+            <button onClick={() => setBuilding(true)} className="fadeUp"
+              style={{ background: T.brand, color: "#fff", border: "none", borderRadius: 13, padding: "13px 18px", fontSize: 13.5, fontWeight: 800, cursor: "pointer", boxShadow: T.shadow }}>
+              + Create a rule
+            </button>
+          ) : (
+            <Card ai>
+              <Label>New rule — if this, then that</Label>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.aiDeep, margin: "12px 0 5px" }}>WHEN</div>
+              <select value={newWhen} onChange={(e) => setNewWhen(e.target.value)} aria-label="Rule trigger"
+                style={{ width: "100%", border: `1.5px solid ${T.line}`, background: T.card, color: T.ink, borderRadius: 11, padding: "11px 12px", fontSize: 13, outline: "none" }}>
+                {TRIGGERS.map((t) => <option key={t}>{t}</option>)}
+              </select>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.aiDeep, margin: "12px 0 5px" }}>THEN</div>
+              <select value={newThen} onChange={(e) => setNewThen(e.target.value)} aria-label="Rule action"
+                style={{ width: "100%", border: `1.5px solid ${T.line}`, background: T.card, color: T.ink, borderRadius: 11, padding: "11px 12px", fontSize: 13, outline: "none" }}>
+                {ACTIONS.map((a) => <option key={a}>{a}</option>)}
+              </select>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <button onClick={() => createRule(newWhen, newThen)} style={{ background: T.brand, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Create rule</button>
+                <button onClick={() => setBuilding(false)} style={{ background: "none", color: T.sub, border: `1px solid ${T.line}`, borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 750, cursor: "pointer" }}>Cancel</button>
+              </div>
+              <div style={{ fontSize: 10.5, color: T.sub, marginTop: 10 }}>Money-moving rules only ever move funds between your own accounts/goals — never outside them.</div>
+            </Card>
+          )}
+
+          {/* Rule list */}
+          {rules.map((r, i) => (
+            <Card key={r.id} delay={i * 40} style={{ opacity: allPaused || !r.on ? 0.55 : 1, transition: "opacity .25s" }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+                    <span style={{ fontWeight: 800, color: T.aiDeep, fontSize: 11 }}>WHEN</span> {r.when}<br />
+                    <span style={{ fontWeight: 800, color: T.brand, fontSize: 11 }}>THEN</span> {r.then}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: T.sub, marginTop: 6 }}>
+                    Fired {r.fired}× {r.conflict && <Chip tone="warn">conflicts</Chip>} {allPaused && <Chip tone="warn">paused (all)</Chip>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                  <div onClick={() => toggleRule(r.id)} role="switch" aria-checked={r.on} aria-label={`Toggle rule`}
+                    style={{ width: 42, height: 24, borderRadius: 20, background: r.on && !allPaused ? T.brand : T.wash, position: "relative", cursor: "pointer", transition: "background .2s" }}>
+                    <div style={{ position: "absolute", top: 3, left: r.on && !allPaused ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transition: "left .2s" }} />
+                  </div>
+                  <button onClick={() => deleteRule(r.id)} style={{ background: "none", border: "none", color: T.sub, fontSize: 10.5, cursor: "pointer", fontWeight: 700, padding: 0 }}>delete</button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "Audit Log" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="fadeUp" style={{ fontSize: 11.5, color: T.sub, lineHeight: 1.6, padding: "0 4px" }}>
+            Every time a rule fires, it's recorded here — automation that acts silently is a trust risk, so nothing here is ever hidden (AUTO-006).
+          </div>
+          <Card style={{ padding: 0, overflow: "hidden" }}>
+            {log.map((e, i) => (
+              <div key={i} style={{ padding: "13px 16px", borderBottom: `1px solid ${T.wash}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.sub, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700 }}>{e.rule}</span><span style={mono}>{e.t}</span>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 650 }}>{e.did}</div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      {tab === "Suggested" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {suggestion ? (
+            <Card ai>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}><AIBadge /><Label>Noticed a pattern (AUTO-009)</Label></div>
+              <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+                You've manually re-tagged <b>Gym — Cult.fit</b> as <b style={mono}>#health</b> 4 times. Want to make it a rule so it happens automatically from now on?
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button onClick={() => { createRule("A transaction from [Cult.fit] arrives", "Tag it #health"); setSuggestion(false); setTab("My Rules"); }}
+                  style={{ background: `linear-gradient(135deg, ${T.ai}, ${T.aiDeep})`, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", boxShadow: T.glowAI }}>
+                  Yes, create the rule
+                </button>
+                <button onClick={() => setSuggestion(false)} style={{ background: "none", color: T.sub, border: `1px solid ${T.line}`, borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 750, cursor: "pointer" }}>No thanks</button>
+              </div>
+            </Card>
+          ) : (
+            <Card><div style={{ fontSize: 13, color: T.sub, textAlign: "center", padding: 10 }}>No suggestions right now — FinPilot only suggests a rule after observing a genuinely repeated manual pattern, never speculatively.</div></Card>
+          )}
+          <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", lineHeight: 1.6, padding: "0 16px" }}>
+            Suggestions are consent-first: nothing becomes a rule until you explicitly accept it.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   NOTIFICATIONS CENTER — M26
+   Persistent inbox (NOTIF-007) · digest mode (005) · snooze (011) ·
+   preference center (003) · life-event bundle grouping (010)
+   ================================================================ */
+const INITIAL_NOTIFS = [
+  { id: 1, icon: "⚠️", cat: "Budget", title: "Shopping crossed 120% of budget", body: "₹14,750 spent of ₹12,000 — tap to review the category.", t: "Today 08:10", unread: true, critical: true },
+  { id: 2, icon: "📄", cat: "Bills", title: "Netflix renews in 6 days at the new ₹649 price", body: "Up 30% since May. Keep, or mark cancelled to stop alerts.", t: "Today 07:30", unread: true },
+  { id: 3, icon: "✦", cat: "AI Insight", title: "Your weekly briefing is ready", body: "Savings rate up, one overlap warning, one goal ahead of pace.", t: "Mon 09:00", unread: true, ai: true },
+  { id: 4, icon: "🛡️", cat: "Insurance", title: "Health policy premium due Sep 3", body: "Auto-reminder 30 days ahead — grace-period lapse is irreversible.", t: "Sun 10:00" },
+  { id: 5, icon: "🎉", cat: "Goals", title: "Emergency Fund crossed 70%", body: "₹3.86L of ₹5.4L — steady 8-month streak.", t: "Jun 24" },
+];
+const BUNDLE = {
+  title: "New-dependent checklist (3 items, one bundle)",
+  note: "Delivered together, not as a flurry (NOTIF-010)",
+  items: ["Insurance gap re-check ready", "Education goal draft created", "Add dependent to Household"],
+  t: "Jun 20",
+};
+function Notifs({ back }) {
+  const T = useT();
+  const [list, setList] = useState(INITIAL_NOTIFS);
+  const [digest, setDigest] = useState(false);
+  const [prefs, setPrefs] = useState({ Budget: true, Bills: true, "AI Insight": true, Insurance: true, Goals: true });
+  const [showPrefs, setShowPrefs] = useState(false);
+  const snooze = (id) => setList(list.map((n) => (n.id === id ? { ...n, snoozed: true, unread: false } : n)));
+  const markRead = (id) => setList(list.map((n) => (n.id === id ? { ...n, unread: false } : n)));
+  const visible = list.filter((n) => prefs[n.cat]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="fadeUp" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button onClick={back} style={{ background: "none", border: "none", color: T.brand, fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}>← Back</button>
+        <button onClick={() => setShowPrefs(!showPrefs)} style={{ background: T.wash, border: "none", color: T.sub, fontSize: 12, fontWeight: 750, borderRadius: 20, padding: "7px 14px", cursor: "pointer" }}>
+          {showPrefs ? "Hide preferences" : "⚙ Preferences"}
+        </button>
+      </div>
+
+      {showPrefs && (
+        <Card ai>
+          <Label>Preference center (NOTIF-003)</Label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            {Object.keys(prefs).map((c) => (
+              <button key={c} onClick={() => setPrefs({ ...prefs, [c]: !prefs[c] })}
+                style={{ border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 12, fontWeight: 750, cursor: "pointer", background: prefs[c] ? T.brandSoft : T.wash, color: prefs[c] ? T.brand : T.sub }}>
+                {prefs[c] ? "✓" : "✕"} {c}
+              </button>
+            ))}
+          </div>
+          <div onClick={() => setDigest(!digest)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, cursor: "pointer" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 750 }}>Daily digest mode (NOTIF-005)</div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>Batch non-critical alerts into one daily summary — critical alerts always come through instantly.</div>
+            </div>
+            <div style={{ width: 44, height: 25, borderRadius: 20, background: digest ? T.brand : T.wash, position: "relative", transition: "background .2s", flexShrink: 0 }}>
+              <div style={{ position: "absolute", top: 3, left: digest ? 22 : 3, width: 19, height: 19, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transition: "left .2s" }} />
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {digest && (
+        <Card style={{ background: T.cardAlt }}>
+          <Label>Today's digest — 2 non-critical items</Label>
+          <div style={{ fontSize: 13, marginTop: 8, lineHeight: 1.7 }}>
+            • Netflix renews in 6 days at ₹649<br />• Weekly AI briefing is ready
+          </div>
+          <div style={{ fontSize: 11, color: T.sub, marginTop: 8 }}>Critical alerts (like your Shopping overage) still arrived individually below.</div>
+        </Card>
+      )}
+
+      {visible.map((n, i) => (
+        <Card key={n.id} delay={i * 40} ai={n.ai} alert={n.critical ? "danger" : undefined}
+          style={{ opacity: n.snoozed ? 0.55 : 1 }} onClick={() => markRead(n.id)}>
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ fontSize: 20, flexShrink: 0 }}>{n.icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ fontSize: 13.5, fontWeight: n.unread ? 800 : 650 }}>{n.title} {n.unread && <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 7, background: T.brand, marginLeft: 4 }} />}</div>
+                <span style={{ fontSize: 10.5, color: T.sub, ...mono, whiteSpace: "nowrap" }}>{n.t}</span>
+              </div>
+              <div style={{ fontSize: 12, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>{n.body}</div>
+              <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center" }}>
+                <Chip>{n.cat}</Chip>
+                {!n.critical && !n.snoozed && (
+                  <button onClick={(e) => { e.stopPropagation(); snooze(n.id); }}
+                    style={{ background: "none", border: "none", color: T.sub, fontSize: 11, fontWeight: 750, cursor: "pointer", padding: 0 }}>⏰ Snooze to evening</button>
+                )}
+                {n.snoozed && <Chip tone="warn">snoozed — returns 7 PM (NOTIF-011)</Chip>}
+              </div>
+            </div>
+          </div>
+        </Card>
+      ))}
+
+      {/* Life-event bundle (NOTIF-010) */}
+      <Card delay={260} style={{ borderLeft: `3px solid ${T.brand}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <Label>{BUNDLE.title}</Label><span style={{ fontSize: 10.5, color: T.sub, ...mono }}>{BUNDLE.t}</span>
+        </div>
+        {BUNDLE.items.map((it) => (
+          <div key={it} style={{ fontSize: 13, padding: "8px 0", borderBottom: `1px solid ${T.wash}` }}>• {it}</div>
+        ))}
+        <div style={{ fontSize: 11, color: T.sub, marginTop: 8 }}>{BUNDLE.note}</div>
+      </Card>
+      <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", padding: "0 16px", lineHeight: 1.6 }}>
+        This inbox is persistent & searchable — a dismissed notification is never permanently lost (NOTIF-007). Read state syncs across your devices (NOTIF-008).
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   SETTINGS — M29
+   Linked accounts & consent (SET-002/009, SEC-007) · AI
+   personalization (006) · accessibility (010) · data export &
+   deletion with grace period (004/012)
+   ================================================================ */
+function Settings({ back, dark, setDark }) {
+  const T = useT();
+  const [accounts, setAccounts] = useState(USER.linkedAccounts ?? [
+    { bank: "HDFC Bank", type: "Savings", last4: "4821", consentExpiry: "Mar 2027", status: "active" },
+    { bank: "ICICI Bank", type: "Salary", last4: "0937", consentExpiry: "Jan 2027", status: "active" },
+    { bank: "Zerodha", type: "Broker", last4: "—", consentExpiry: "Feb 2027", status: "active" },
+  ]);
+  const [ai, setAi] = useState({ tone: "Encouraging", verbosity: "Balanced", proactivity: "Weekly + critical only" });
+  const [acc, setAcc] = useState({ senior: false, contrast: false, motion: false });
+  const [exportFmt, setExportFmt] = useState("PDF");
+  const [deleting, setDeleting] = useState(0); // 0 none, 1 confirm, 2 grace
+  const revoke = (bank) => setAccounts(accounts.map((a) => (a.bank === bank ? { ...a, status: a.status === "active" ? "revoked" : "active" } : a)));
+  const ACCESS_LOG = [
+    { t: "Today 07:12", who: "Account Aggregator sync", what: "Balances + transactions (HDFC, ICICI)" },
+    { t: "Today 07:15", who: "Broker feed", what: "Holdings snapshot (Zerodha)" },
+    { t: "Jul 12, 09:00", who: "AI model provider", what: "Anonymized conversation context — no raw account numbers" },
+  ];
+  const sel = (obj, setObj, key, options) => (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 750, marginBottom: 6 }}>{key[0].toUpperCase() + key.slice(1)}</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {options.map((o) => (
+          <button key={o} onClick={() => setObj({ ...obj, [key]: o })}
+            style={{ border: "none", borderRadius: 20, padding: "7px 13px", fontSize: 11.5, fontWeight: 750, cursor: "pointer", background: obj[key] === o ? T.brand : T.wash, color: obj[key] === o ? "#fff" : T.sub }}>{o}</button>
+        ))}
+      </div>
+    </div>
+  );
+  const Toggle = ({ on, set, title, desc }) => (
+    <div onClick={set} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderTop: `1px solid ${T.wash}`, cursor: "pointer" }}>
+      <div><div style={{ fontSize: 13, fontWeight: 750 }}>{title}</div><div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>{desc}</div></div>
+      <div style={{ width: 44, height: 25, borderRadius: 20, background: on ? T.brand : T.wash, position: "relative", transition: "background .2s", flexShrink: 0 }}>
+        <div style={{ position: "absolute", top: 3, left: on ? 22 : 3, width: 19, height: 19, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transition: "left .2s" }} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <button onClick={back} className="fadeUp" style={{ background: "none", border: "none", color: T.brand, fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0, textAlign: "left" }}>← Back</button>
+
+      <Card>
+        <Label>Linked accounts & consent (SET-002 / AUTH-015)</Label>
+        {accounts.map((a) => (
+          <div key={a.bank} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderTop: `1px solid ${T.wash}` }}>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 750 }}>{a.bank} <span style={{ color: T.sub, fontWeight: 400, fontSize: 12 }}>· {a.type} {a.last4 !== "—" && `•${a.last4}`}</span></div>
+              <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>
+                {a.status === "revoked" ? "Consent revoked — data no longer syncs; history retained & deletable" : `Consent expires ${a.consentExpiry} — renewal will be asked, never assumed`}
+              </div>
+            </div>
+            <button onClick={() => revoke(a.bank)}
+              style={{ background: "none", border: `1px solid ${T.line}`, borderRadius: 9, padding: "7px 13px", fontSize: 11.5, fontWeight: 750, cursor: "pointer", color: a.status === "active" ? T.danger : T.success }}>
+              {a.status === "active" ? "Revoke" : "Re-link"}
+            </button>
+          </div>
+        ))}
+      </Card>
+
+      <Card delay={60}>
+        <Label>Data-sharing dashboard (SET-009 / SEC-007)</Label>
+        <div style={{ fontSize: 11.5, color: T.sub, margin: "6px 0 4px" }}>Every third-party access of your data, in one auditable place:</div>
+        {ACCESS_LOG.map((l, i) => (
+          <div key={i} style={{ padding: "10px 0", borderTop: `1px solid ${T.wash}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.sub }}>
+              <b style={{ color: T.ink, fontSize: 12.5 }}>{l.who}</b><span style={mono}>{l.t}</span>
+            </div>
+            <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>{l.what}</div>
+          </div>
+        ))}
+      </Card>
+
+      <Card delay={100} ai>
+        <Label>AI personalization (SET-006)</Label>
+        {sel(ai, setAi, "tone", ["Encouraging", "Direct", "Detailed teacher"])}
+        {sel(ai, setAi, "verbosity", ["Brief", "Balanced", "Thorough"])}
+        {sel(ai, setAi, "proactivity", ["Critical only", "Weekly + critical only", "Everything useful"])}
+        <div style={{ fontSize: 11, color: T.sub, marginTop: 12 }}>The Coach adapts style — never facts. Numbers stay deterministic regardless of tone.</div>
+      </Card>
+
+      <Card delay={140}>
+        <Label>Accessibility (SET-010) & display</Label>
+        <Toggle on={acc.senior} set={() => setAcc({ ...acc, senior: !acc.senior })} title="Senior Mode" desc="Larger text & simplified layout — also auto-offered with the Retiree persona" />
+        <Toggle on={acc.contrast} set={() => setAcc({ ...acc, contrast: !acc.contrast })} title="High contrast" desc="Stronger color separation on charts & meters" />
+        <Toggle on={acc.motion} set={() => setAcc({ ...acc, motion: !acc.motion })} title="Reduce motion" desc="Also respects your device-level preference automatically" />
+        <Toggle on={dark} set={() => setDark(!dark)} title="Dark mode (SET-011)" desc="Full token-pair theme, not an overlay filter" />
+      </Card>
+
+      <Card delay={180}>
+        <Label>Your data — export & deletion (SET-004 / 012)</Label>
+        <div style={{ fontSize: 12.5, fontWeight: 750, margin: "10px 0 6px" }}>Export format</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["PDF", "CSV", "JSON"].map((f) => (
+            <button key={f} onClick={() => setExportFmt(f)}
+              style={{ border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 11.5, fontWeight: 750, cursor: "pointer", background: exportFmt === f ? T.brand : T.wash, color: exportFmt === f ? "#fff" : T.sub }}>{f}</button>
+          ))}
+        </div>
+        <button style={{ marginTop: 12, background: T.brandSoft, color: T.brand, border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+          ⬇ Download my complete data ({exportFmt})
+        </button>
+        <div style={{ fontSize: 11, color: T.sub, marginTop: 8, lineHeight: 1.55 }}>Taking your data elsewhere is a right, not a retention battle — no friction, no exit interview (Data Ownership §43).</div>
+
+        <div style={{ borderTop: `1px solid ${T.wash}`, marginTop: 14, paddingTop: 14 }}>
+          {deleting === 0 && (
+            <button onClick={() => setDeleting(1)} style={{ background: "none", border: `1px solid ${T.danger}50`, color: T.danger, borderRadius: 10, padding: "10px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+              Delete my account…
+            </button>
+          )}
+          {deleting === 1 && (
+            <div className="fadeUp">
+              <div style={{ fontSize: 13, fontWeight: 750, color: T.danger }}>Delete everything?</div>
+              <div style={{ fontSize: 12, color: T.sub, margin: "6px 0 10px", lineHeight: 1.6 }}>
+                All data — including backups — is purged after a 30-day grace period during which you can change your mind. After that it's genuinely gone, everywhere (Data Retention §42).
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setDeleting(2)} style={{ background: T.danger, color: "#fff", border: "none", borderRadius: 9, padding: "9px 15px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Start 30-day deletion</button>
+                <button onClick={() => setDeleting(0)} style={{ background: "none", color: T.sub, border: `1px solid ${T.line}`, borderRadius: 9, padding: "9px 15px", fontSize: 12, fontWeight: 750, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {deleting === 2 && (
+            <div className="fadeUp" style={{ background: T.dangerSoft, borderRadius: 11, padding: "11px 14px" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: T.danger }}>Deletion scheduled — 30 days remaining</div>
+              <div style={{ fontSize: 11.5, color: T.sub, marginTop: 4 }}>Sign in any time before then to cancel. <button onClick={() => setDeleting(0)} style={{ background: "none", border: "none", color: T.brand, fontWeight: 800, cursor: "pointer", padding: 0, fontSize: 11.5 }}>Cancel now</button></div>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+
+/* ================================================================
    APP SHELL
    ================================================================ */
-export default function FinPilotV3() {
+export default function FinPilotV9() {
   const F = useFinance();
   const [entered, setEntered] = useState(false);
   const [nav, setNav] = useState("home");
@@ -1052,7 +2173,7 @@ export default function FinPilotV3() {
   const [persona, setPersona] = useState("Professional");
   const [personaOpen, setPersonaOpen] = useState(false);
   const T = dark ? THEMES.dark : THEMES.light;
-  const NAVS = [["home", "Home", "⌂"], ["money", "Money", "◐"], ["wealth", "Wealth", "◆"], ["goals", "Goals", "◎"], ["ai", "AI Coach", "✦"]];
+  const NAVS = [["home", "Home", "◉"], ["money", "Money", "⇄"], ["wealth", "Wealth", "◆"], ["goals", "Goals", "◎"], ["family", "Family", "⌂"], ["rules", "Rules", "⚡"], ["ai", "AI", "✦"]];
 
   return (
     <Theme.Provider value={T}>
@@ -1068,7 +2189,7 @@ export default function FinPilotV3() {
           @media (prefers-reduced-motion: reduce){.fadeUp,.floatY{animation:none}}
           input[type=range]{height:5px}`}</style>
 
-        {!entered && <Splash T={T} onEnter={() => setEntered(true)} />}
+        {!entered && <Onboarding T={T} score={F.health.score} onComplete={(p) => { setPersona(p); setEntered(true); }} />}
 
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 14px 94px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 2px 14px" }}>
@@ -1076,7 +2197,7 @@ export default function FinPilotV3() {
               <div style={{ ...disp, fontWeight: 700, fontSize: 20, color: T.brand }}>FinPilot <span style={{ color: T.ai }}>AI</span></div>
               <button onClick={() => setPersonaOpen(!personaOpen)}
                 style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: T.sub, cursor: "pointer", fontWeight: 650 }}>
-                {USER.name} · {PERSONAS[persona].label} ⌄
+                {USER.name} · {PERSONAS[persona].label} ▾
               </button>
               {personaOpen && (
                 <div style={{ position: "absolute", zIndex: 70, marginTop: 6, background: T.card, border: `1px solid ${T.line}`, borderRadius: 13, boxShadow: "0 16px 40px rgba(0,0,0,.22)", overflow: "hidden" }}>
@@ -1091,11 +2212,17 @@ export default function FinPilotV3() {
               )}
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button onClick={() => setNav("notifs")} aria-label="Notifications"
+                style={{ width: 37, height: 37, borderRadius: 13, border: `1px solid ${T.line}`, background: T.card, cursor: "pointer", fontSize: 15, position: "relative" }}>
+                🔔
+                <span style={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: 8, background: T.danger, border: `1.5px solid ${T.card}` }} />
+              </button>
               <button onClick={() => setDark(!dark)} aria-label="Toggle dark mode"
                 style={{ width: 37, height: 37, borderRadius: 13, border: `1px solid ${T.line}`, background: T.card, cursor: "pointer", fontSize: 15 }}>
-                {dark ? "☾" : "☀"}
+                {dark ? "☀️" : "🌙"}
               </button>
-              <div style={{ width: 37, height: 37, borderRadius: "50%", background: T.brandSoft, color: dark ? T.brandDeep : T.brand, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>AM</div>
+              <button onClick={() => setNav("settings")} aria-label="Settings"
+                style={{ width: 37, height: 37, borderRadius: "50%", border: "none", background: T.brandSoft, color: dark ? T.brandDeep : T.brand, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>AM</button>
             </div>
           </div>
 
@@ -1104,7 +2231,11 @@ export default function FinPilotV3() {
             {nav === "money" && <Money F={F} />}
             {nav === "wealth" && <Wealth F={F} />}
             {nav === "goals" && <Goals F={F} />}
+            {nav === "family" && <Household F={F} />}
+            {nav === "rules" && <Rules F={F} />}
             {nav === "ai" && <Coach F={F} />}
+            {nav === "notifs" && <Notifs back={() => setNav("home")} />}
+            {nav === "settings" && <Settings back={() => setNav("home")} dark={dark} setDark={setDark} />}
           </div>
         </div>
 
