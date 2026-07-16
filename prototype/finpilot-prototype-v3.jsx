@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, createContext, useContext } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, LineChart, Line,
+  PieChart, Pie, Cell, BarChart, Bar as RechartsBar, CartesianGrid, LineChart, Line,
 } from "recharts";
 
 /* ================================================================
@@ -574,7 +574,7 @@ function Money({ F }) {
                   <XAxis dataKey="m" tick={{ fontSize: 11, fill: T.sub }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   <Tooltip formatter={(v) => fmt(v)} contentStyle={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, color: T.ink }} />
-                  <Bar dataKey="amt" fill={T.brand} radius={[8, 8, 0, 0]} />
+                  <RechartsBar dataKey="amt" fill={T.brand} radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
