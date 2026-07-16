@@ -692,7 +692,7 @@ function Money({ F }) {
   };
   return (
     <div>
-      <SubTabs tabs={["Transactions", "Budgets", "Income", "Subscriptions"]} tab={tab} setTab={setTab} />
+      <SubTabs tabs={["Transactions", "Budgets", "Income", "Subscriptions", "Tax"]} tab={tab} setTab={setTab} />
       {toast && <div style={{ position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "#0E3B2E", color: "#CFF3E3", fontSize: 12.5, fontWeight: 750, padding: "11px 17px", borderRadius: 30, boxShadow: "0 10px 28px rgba(0,0,0,.3)" }}>{toast}</div>}
 
       {tab === "Transactions" && (
@@ -813,6 +813,110 @@ function Money({ F }) {
           ))}
         </div>
       )}
+
+      {tab === "Tax" && <TaxScreen F={F} />}
+    </div>
+  );
+}
+
+/* ================================================================
+   TAX PLANNING — M25
+   Filing countdown (TAX-010) · regime comparison (002) · deduction
+   tracker (003) · advance-tax schedule (005) · educational only
+   ================================================================ */
+function TaxScreen({ F }) {
+  const T = useT();
+  const [use80C, setUse80C] = useState(true);
+  const annual = Math.round(F.usable * 12);
+  // Illustrative deterministic slab math (demo slabs — clearly labeled)
+  const ded = (use80C ? 150000 : 0) + 21600; // 80C + 80D (health premium)
+  const oldTaxable = Math.max(0, annual - 50000 - ded);
+  const newTaxable = Math.max(0, annual - 75000);
+  const slab = (ti, slabs) => {
+    let tax = 0, prev = 0;
+    for (const [upTo, rate] of slabs) { const band = Math.min(ti, upTo) - prev; if (band > 0) tax += band * rate; prev = upTo; if (ti <= upTo) break; }
+    return Math.round(tax * 1.04); // +4% cess
+  };
+  const oldTax = slab(oldTaxable, [[250000, 0], [500000, .05], [1000000, .2], [Infinity, .3]]);
+  const newTax = slab(newTaxable, [[300000, 0], [700000, .05], [1000000, .1], [1200000, .15], [1500000, .2], [Infinity, .3]]);
+  const better = newTax < oldTax ? "new" : "old";
+  const QUARTERS = [
+    { q: "Q1 · Jun 15", amt: 4800, status: "paid" },
+    { q: "Q2 · Sep 15", amt: 5200, status: "upcoming" },
+    { q: "Q3 · Dec 15", amt: 5200, status: "later" },
+    { q: "Q4 · Mar 15", amt: 5600, status: "later" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Filing countdown (TAX-010) */}
+      <Card alert="warn">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <Label>ITR filing deadline (TAX-010)</Label>
+            <div style={{ fontSize: 13.5, marginTop: 6 }}>Assessment-year filing closes <b>Sep 15</b></div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <Num size={26} color={T.warn}>45</Num>
+            <div style={{ fontSize: 10, color: T.sub, fontWeight: 800 }}>DAYS LEFT</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Regime comparison (TAX-002) */}
+      <Card delay={50}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <Label>Old vs new regime (TAX-002)</Label>
+          <span style={{ fontSize: 10.5, color: T.sub }}>Illustrative slabs — estimate, not a filing figure<Explain text={`Annual income ${fmtL(annual)} (your smoothed usable income × 12). Old regime: ₹50k standard deduction + your actual claimed deductions. New regime: ₹75k standard deduction, no 80C/80D. Includes 4% cess. Slab rates simplified for the demo.`} /></span>
+        </div>
+        <button onClick={() => setUse80C(!use80C)}
+          style={{ marginTop: 10, border: "none", borderRadius: 20, padding: "7px 14px", fontSize: 11.5, fontWeight: 750, cursor: "pointer", background: use80C ? T.brandSoft : T.wash, color: use80C ? T.brand : T.sub }}>
+          {use80C ? "✓" : "✕"} Include ₹1.5L 80C investments
+        </button>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+          {[["old", "Old regime", oldTax], ["new", "New regime", newTax]].map(([k, label, tax]) => (
+            <div key={k} style={{ background: better === k ? T.successSoft : T.wash, border: better === k ? `1.5px solid ${T.success}50` : "none", borderRadius: 13, padding: 14, position: "relative" }}>
+              {better === k && <span style={{ position: "absolute", top: -9, right: 10 }}><Chip tone="success">saves {fmtL(Math.abs(oldTax - newTax))}</Chip></span>}
+              <div style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>{label}</div>
+              <Num size={20} color={better === k ? T.success : undefined}>{fmtL(tax)}</Num>
+              <div style={{ fontSize: 10.5, color: T.sub, marginTop: 2 }}>est. annual tax</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Deduction tracker (TAX-003) */}
+      <Card delay={100}>
+        <Label>Deduction utilization (TAX-003)</Label>
+        {[["80C — ELSS, EPF, PPF", 120000 + (use80C ? 30000 : 0) - 30000, 150000], ["80D — health premiums", 21600, 25000]].map(([l, used, cap]) => (
+          <div key={l} style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
+              <span style={{ fontWeight: 650 }}>{l}</span>
+              <span style={mono}>{fmt(used)} <span style={{ color: T.sub }}>/ {fmt(cap)}</span></span>
+            </div>
+            <Meter pct={(used / cap) * 100} height={7} />
+            {used < cap && <div style={{ fontSize: 11, color: T.sub, marginTop: 4 }}>Headroom left: <b style={mono}>{fmt(cap - used)}</b></div>}
+          </div>
+        ))}
+      </Card>
+
+      {/* Advance tax (TAX-005) */}
+      <Card delay={150}>
+        <Label>Advance tax on freelance income (TAX-005)</Label>
+        <div style={{ fontSize: 11.5, color: T.sub, margin: "6px 0 4px" }}>Your side income has no TDS — quarterly installments avoid interest penalties.</div>
+        {QUARTERS.map((q) => (
+          <div key={q.q} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: `1px solid ${T.wash}` }}>
+            <span style={{ fontSize: 13, fontWeight: 650 }}>{q.q}</span>
+            <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <b style={mono}>{fmt(q.amt)}</b>
+              <Chip tone={q.status === "paid" ? "success" : q.status === "upcoming" ? "warn" : "neutral"}>{q.status === "paid" ? "✓ paid" : q.status === "upcoming" ? "due in 8 wks" : "scheduled"}</Chip>
+            </span>
+          </div>
+        ))}
+      </Card>
+
+      <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", lineHeight: 1.6, padding: "0 16px" }}>
+        Educational estimates for planning only — FinPilot never files, and never replaces a tax professional (TAX-004 boundary). Ask the AI Coach about any figure; it will cite the source.
+      </div>
     </div>
   );
 }
@@ -832,7 +936,7 @@ function Wealth({ F }) {
 
   return (
     <div>
-      <SubTabs tabs={["Net Worth", "Investments", "Loan", "Insurance"]} tab={tab} setTab={setTab} />
+      <SubTabs tabs={["Net Worth", "Investments", "Loan", "Insurance", "Reports"]} tab={tab} setTab={setTab} />
       {tab === "Net Worth" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Card>
@@ -970,6 +1074,73 @@ function Wealth({ F }) {
           </div>
         </div>
       )}
+
+      {tab === "Reports" && <ReportsScreen F={F} />}
+    </div>
+  );
+}
+
+/* ================================================================
+   REPORTS & ANALYTICS — M16
+   Monthly summary (REP-001) · Year-in-Review (009) · advisor share
+   link with expiry & annotation (006/014) · scheduled delivery (008)
+   ================================================================ */
+function ReportsScreen({ F }) {
+  const T = useT();
+  const [note, setNote] = useState("");
+  const [link, setLink] = useState(null);
+  const [scheduled, setScheduled] = useState(false);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Monthly summary (REP-001) */}
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <Label>June summary (REP-001)</Label>
+          <button style={{ background: T.brandSoft, color: T.brand, border: "none", borderRadius: 9, padding: "7px 13px", fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>⬇ PDF</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+          {[["Income", fmtL(F.usable), T.success], ["Spent", fmtL(F.spent + F.emi), T.ink], ["Saved", fmtL(F.savings), T.brand], ["Net worth Δ", "+₹85,000", T.success]].map(([l, v, c]) => (
+            <div key={l} style={{ background: T.wash, borderRadius: 11, padding: 12 }}>
+              <div style={{ fontSize: 10.5, color: T.sub, fontWeight: 700 }}>{l}</div>
+              <Num size={17} color={c}>{v}</Num>
+            </div>
+          ))}
+        </div>
+        <div onClick={() => setScheduled(!scheduled)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, cursor: "pointer" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700 }}>Email me this on the 1st of every month <span style={{ fontSize: 10.5, color: T.sub, fontWeight: 500 }}>(REP-008)</span></div>
+          <div style={{ width: 44, height: 25, borderRadius: 20, background: scheduled ? T.brand : T.wash, position: "relative", transition: "background .2s", flexShrink: 0 }}>
+            <div style={{ position: "absolute", top: 3, left: scheduled ? 22 : 3, width: 19, height: 19, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)", transition: "left .2s" }} />
+          </div>
+        </div>
+      </Card>
+
+      {/* Year in review (REP-009) */}
+      <div className="fadeUp" style={{ borderRadius: 18, padding: 18, background: `linear-gradient(135deg, ${T.heroA}, ${T.heroC})`, color: "#fff", animationDelay: "60ms" }}>
+        <Label light>Your 2026 so far (REP-009)</Label>
+        <div style={{ fontSize: 15, fontWeight: 800, ...disp, margin: "8px 0 4px" }}>Net worth up 24.5% · 2 goals ahead of pace · best savings streak: 8 months 🎉</div>
+        <div style={{ fontSize: 12, opacity: .85, lineHeight: 1.6 }}>Your full narrative Year-in-Review unlocks in December — a shareable story of the year, not just a table.</div>
+      </div>
+
+      {/* Advisor share (REP-006/014) */}
+      <Card delay={120}>
+        <Label>Share with your advisor (REP-006)</Label>
+        <div style={{ fontSize: 12, color: T.sub, margin: "6px 0 10px", lineHeight: 1.55 }}>Read-only, auto-expiring — the advisor sees your report, never your login or live accounts.</div>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder='Optional note, e.g. "ignore the March spike — one-time medical expense"' aria-label="Report annotation"
+          style={{ width: "100%", boxSizing: "border-box", border: `1.5px solid ${T.line}`, background: T.card, color: T.ink, borderRadius: 11, padding: "11px 13px", fontSize: 13, outline: "none" }} />
+        <div style={{ fontSize: 10.5, color: T.sub, marginTop: 5 }}>Annotation travels with the report (REP-014) — context, not a bare data dump.</div>
+        {!link ? (
+          <button onClick={() => setLink("finpilot.app/r/8kq2x…")}
+            style={{ marginTop: 12, background: T.brand, color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+            Generate 7-day link
+          </button>
+        ) : (
+          <div className="fadeUp" style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ ...mono, fontSize: 12.5, background: T.wash, borderRadius: 8, padding: "8px 12px" }}>{link}</span>
+            <Chip tone="success">expires in 7 days</Chip>
+            <button onClick={() => setLink(null)} style={{ background: "none", border: "none", color: T.danger, fontSize: 11.5, fontWeight: 800, cursor: "pointer" }}>Revoke now</button>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -1007,7 +1178,7 @@ function Goals({ F }) {
   ];
   return (
     <div>
-      <SubTabs tabs={["Health Score", "Simulator", "Peers", "Goals"]} tab={tab} setTab={setTab} />
+      <SubTabs tabs={["Health Score", "Simulator", "Peers", "Goals", "Rewards"]} tab={tab} setTab={setTab} />
       {tab === "Health Score" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Card style={{ display: "flex", gap: 20, alignItems: "center" }}>
@@ -1107,6 +1278,8 @@ function Goals({ F }) {
       )}
 
       {tab === "Peers" && <Bench F={F} />}
+
+      {tab === "Rewards" && <Rewards F={F} />}
     </div>
   );
 }
@@ -1913,6 +2086,162 @@ function Rules({ F }) {
 }
 
 /* ================================================================
+   ACHIEVEMENTS & GAMIFICATION — M27
+   Streaks + streak freeze (GAM-001/006) · badge gallery (002/005) ·
+   level system tied to Health Score (003) · challenges incl.
+   AI-personalized (004/010) · anti-gaming safeguards (009)
+   ================================================================ */
+const BADGES = [
+  { icon: "🔥", name: "8-month savings streak", earned: true },
+  { icon: "🛟", name: "Emergency Fund 50%", earned: true },
+  { icon: "📊", name: "First budget month on track", earned: true },
+  { icon: "🧾", name: "Linked 3 account types", earned: true },
+  { icon: "🏆", name: "Health Score 80+", earned: false, how: "Currently 68 — close the insurance gap for the biggest jump" },
+  { icon: "🎯", name: "Any goal completed", earned: false, how: "Goa Vacation is 70% there" },
+];
+function Rewards({ F }) {
+  const T = useT();
+  const [freezeUsed, setFreezeUsed] = useState(false);
+  const [challengeState, setChallengeState] = useState(null); // null | joined | declined
+  const level = F.health.score >= 80 ? 4 : F.health.score >= 65 ? 3 : F.health.score >= 50 ? 2 : 1;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Level (GAM-003) */}
+      <Card style={{ display: "flex", gap: 16, alignItems: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: `linear-gradient(135deg, ${T.brand}, ${T.heroB})`, color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ fontSize: 9, fontWeight: 800, opacity: .8 }}>LEVEL</div>
+          <div style={{ ...mono, fontSize: 22, fontWeight: 700 }}>{level}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>Steady Builder</div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 2, lineHeight: 1.5 }}>
+            Levels track your Health Score (GAM-003) — Level 4 "Resilient" unlocks at score 80. Next best move: the insurance gap (+9 pts).
+          </div>
+        </div>
+      </Card>
+
+      {/* Streak + freeze (GAM-001/006) */}
+      <Card delay={50}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <Label>Savings streak (GAM-001)</Label>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 6 }}>
+              <Num size={24}>🔥 8 months</Num>
+              <span style={{ fontSize: 11.5, color: T.sub }}>saved &gt; 0 every month</span>
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <button onClick={() => setFreezeUsed(true)} disabled={freezeUsed}
+              style={{ background: freezeUsed ? T.wash : T.aiSoft, color: freezeUsed ? T.sub : T.aiDeep, border: "none", borderRadius: 12, padding: "9px 14px", fontSize: 11.5, fontWeight: 800, cursor: freezeUsed ? "default" : "pointer" }}>
+              {freezeUsed ? "❄ Freeze armed" : "❄ Arm streak freeze"}
+            </button>
+            <div style={{ fontSize: 9.5, color: T.sub, marginTop: 4, maxWidth: 120 }}>One lapse won't erase 8 months (GAM-006)</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Badge gallery (GAM-002/005) */}
+      <Card delay={100}>
+        <Label>Badge gallery (GAM-005)</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
+          {BADGES.map((b) => (
+            <div key={b.name} style={{ background: T.wash, borderRadius: 13, padding: "12px 8px", textAlign: "center", opacity: b.earned ? 1 : 0.55 }}>
+              <div style={{ fontSize: 24, filter: b.earned ? "none" : "grayscale(1)" }}>{b.icon}</div>
+              <div style={{ fontSize: 10, fontWeight: 750, marginTop: 5, lineHeight: 1.35 }}>{b.name}</div>
+              {!b.earned && <div style={{ fontSize: 9, color: T.sub, marginTop: 3, lineHeight: 1.35 }}>{b.how}</div>}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Personalized challenge (GAM-004/010) */}
+      <Card delay={150} ai>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}><AIBadge /><Label>Challenge picked for you (GAM-010)</Label></div>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>Shopping reset: 2 weeks at ₹5,500</div>
+        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 5, lineHeight: 1.55 }}>
+          Chosen because budget adherence is your weakest Health Score pillar — and Shopping specifically. Completing it ≈ <b style={{ ...mono, color: T.success }}>+4 pts</b>.
+        </div>
+        {!challengeState ? (
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button onClick={() => setChallengeState("joined")} style={{ background: `linear-gradient(135deg, ${T.ai}, ${T.aiDeep})`, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", boxShadow: T.glowAI }}>Join the challenge</button>
+            <button onClick={() => setChallengeState("declined")} style={{ background: "none", color: T.sub, border: `1px solid ${T.line}`, borderRadius: 10, padding: "9px 16px", fontSize: 12.5, fontWeight: 750, cursor: "pointer" }}>Not for me</button>
+          </div>
+        ) : (
+          <div style={{ marginTop: 12 }}><Chip tone={challengeState === "joined" ? "success" : "neutral"}>{challengeState === "joined" ? "✓ Joined — day 1 of 14" : "Dismissed — no nagging, promise"}</Chip></div>
+        )}
+      </Card>
+
+      {/* Anti-gaming safeguards (GAM-009) */}
+      <div className="fadeUp" style={{ background: T.cardAlt, border: `1px solid ${T.line}`, borderRadius: 14, padding: 14, fontSize: 11.5, color: T.sub, lineHeight: 1.65 }}>
+        <b style={{ color: T.ink }}>🛡 Anti-gaming rule (GAM-009):</b> no badge, streak, or challenge here can ever be satisfied by financially harmful behavior — skipping insurance premiums, starving an emergency fund, or under-eating a budget to "win" won't count. Wellbeing outranks engagement, by design.
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   PAYWALL / PRICING — PRD Enterprise Addendum §29–30
+   Three tiers · honest paywall pattern (no dark patterns) ·
+   safety alerts never gated · activation-timed trial · self-serve
+   cancellation promise
+   ================================================================ */
+function Paywall({ back }) {
+  const T = useT();
+  const [annual, setAnnual] = useState(true);
+  const [tier, setTier] = useState("plus");
+  const TIERS = [
+    { id: "free", name: "Basic", m: 0, feats: ["Expense, income & budgets", "1 linked bank account", "Financial Health Score", "Capped AI conversations", "All safety alerts — always"] },
+    { id: "plus", name: "Plus", m: 299, feats: ["Everything in Basic", "Unlimited accounts & AI chat", "Investment overlap & risk analytics", "Loan prepayment simulator", "Document Intelligence & OCR", "Tax planning & what-if simulators"] },
+    { id: "hh", name: "Plus Household", m: 449, feats: ["Everything in Plus", "Up to 5 consenting members", "Shared budgets & joint goals", "Household calendar & insights"] },
+  ];
+  const price = (m) => (m === 0 ? "Free" : annual ? `₹${Math.round(m * 10)} /yr` : `₹${m} /mo`);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <button onClick={back} className="fadeUp" style={{ background: "none", border: "none", color: T.brand, fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0, textAlign: "left" }}>← Back</button>
+
+      <div className="fadeUp" style={{ textAlign: "center", padding: "6px 12px 2px" }}>
+        <div style={{ ...disp, fontSize: 21, fontWeight: 700 }}>Go deeper with FinPilot Plus</div>
+        <div style={{ fontSize: 12.5, color: T.sub, marginTop: 5, lineHeight: 1.55 }}>You've linked 2+ account types — your 14-day full trial is unlocked (§30). No card required.</div>
+      </div>
+
+      {/* Billing toggle */}
+      <div className="fadeUp" style={{ display: "flex", justifyContent: "center", gap: 6, animationDelay: "60ms" }}>
+        {[["Monthly", false], ["Annual · ~2 months free", true]].map(([l, v]) => (
+          <button key={l} onClick={() => setAnnual(v)}
+            style={{ border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer", background: annual === v ? T.brand : T.wash, color: annual === v ? "#fff" : T.sub }}>{l}</button>
+        ))}
+      </div>
+
+      {TIERS.map((t, i) => (
+        <Card key={t.id} delay={100 + i * 60} onClick={() => setTier(t.id)}
+          style={{ border: tier === t.id ? `2px solid ${T.brand}` : `1px solid ${T.line}`, position: "relative" }}>
+          {t.id === "plus" && <span style={{ position: "absolute", top: -9, left: 16 }}><Chip tone="success">most popular</Chip></span>}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div style={{ fontSize: 15.5, fontWeight: 800, ...disp }}>{t.name}</div>
+            <Num size={18} color={t.m ? T.brand : undefined}>{price(t.m)}</Num>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            {t.feats.map((f) => (
+              <div key={f} style={{ fontSize: 12.5, padding: "4px 0", color: f.includes("safety") ? T.success : T.ink, fontWeight: f.includes("safety") ? 750 : 500 }}>
+                {f.includes("safety") ? "🛡" : "✓"} {f}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ))}
+
+      <button className="fadeUp" style={{ animationDelay: "300ms", background: `linear-gradient(135deg, ${T.brand}, ${T.heroB})`, color: "#fff", border: "none", borderRadius: 14, padding: "14px 20px", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 12px 30px rgba(10,107,92,.3)" }}>
+        Start 14-day free trial {tier !== "free" && `— ${TIERS.find((x) => x.id === tier).name}`}
+      </button>
+
+      <div className="fadeUp" style={{ fontSize: 11, color: T.sub, textAlign: "center", lineHeight: 1.7, padding: "0 14px 8px", animationDelay: "340ms" }}>
+        <b style={{ color: T.success }}>Safety is never paywalled:</b> coverage-gap, lapse-risk & overdraft alerts stay free forever (§29). Downgrade keeps all your history — nothing held hostage. Cancel anytime, self-serve, no retention call (§30).
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    NOTIFICATIONS CENTER — M26
    Persistent inbox (NOTIF-007) · digest mode (005) · snooze (011) ·
    preference center (003) · life-event bundle grouping (010)
@@ -2029,7 +2358,7 @@ function Notifs({ back }) {
    personalization (006) · accessibility (010) · data export &
    deletion with grace period (004/012)
    ================================================================ */
-function Settings({ back, dark, setDark }) {
+function Settings({ back, dark, setDark, goPlus }) {
   const T = useT();
   const [accounts, setAccounts] = useState(USER.linkedAccounts ?? [
     { bank: "HDFC Bank", type: "Savings", last4: "4821", consentExpiry: "Mar 2027", status: "active" },
@@ -2069,6 +2398,16 @@ function Settings({ back, dark, setDark }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <button onClick={back} className="fadeUp" style={{ background: "none", border: "none", color: T.brand, fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0, textAlign: "left" }}>← Back</button>
+
+      <Card onClick={goPlus} style={{ background: `linear-gradient(135deg, ${T.brandSoft}, ${T.aiSoft})`, border: "none" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 800 }}>FinPilot Basic <Chip>current plan</Chip></div>
+            <div style={{ fontSize: 11.5, color: T.sub, marginTop: 3 }}>Your 14-day Plus trial is unlocked — see what's included</div>
+          </div>
+          <span style={{ fontSize: 18, color: T.brand }}>→</span>
+        </div>
+      </Card>
 
       <Card>
         <Label>Linked accounts & consent (SET-002 / AUTH-015)</Label>
@@ -2165,7 +2504,7 @@ function Settings({ back, dark, setDark }) {
 /* ================================================================
    APP SHELL
    ================================================================ */
-export default function FinPilotV9() {
+export default function FinPilotV11() {
   const F = useFinance();
   const [entered, setEntered] = useState(false);
   const [nav, setNav] = useState("home");
@@ -2235,7 +2574,8 @@ export default function FinPilotV9() {
             {nav === "rules" && <Rules F={F} />}
             {nav === "ai" && <Coach F={F} />}
             {nav === "notifs" && <Notifs back={() => setNav("home")} />}
-            {nav === "settings" && <Settings back={() => setNav("home")} dark={dark} setDark={setDark} />}
+            {nav === "settings" && <Settings back={() => setNav("home")} dark={dark} setDark={setDark} goPlus={() => setNav("plus")} />}
+            {nav === "plus" && <Paywall back={() => setNav("settings")} />}
           </div>
         </div>
 

@@ -127,9 +127,20 @@ prototype/      Standalone JSX showcase prototype (not part of the production bu
 
 ## 🎨 `/prototype`
 
-`prototype/finpilot-prototype-v3.jsx` is a standalone React showcase
-prototype used for early UX/product exploration, wrapped in a minimal Vite
-build.
+Two standalone React files used for early UX/product exploration, wrapped in
+a minimal Vite build:
+
+- `prototype/finpilot-prototype-v3.jsx` — the **consumer app** (onboarding →
+  Home → Money → Wealth → Goals → Family → Rules → AI Coach → Notifications
+  → Settings)
+- `prototype/finpilot-admin-portal.jsx` — the **staff surface** (AI quality
+  gates, incident triage, feature flags, compliance audit)
+
+Together they cover **Wave 1 (Epics 1–5) fully functional**, plus modules
+from Epics 6–9 and the Enterprise Addendum. See
+[`FinPilot_Demo_Guide_and_Coverage_Map.md`](FinPilot_Demo_Guide_and_Coverage_Map.md)
+for the full walkthrough script and the feature-by-feature coverage table
+(implemented ✅ / represented 🔶 / not in scope ⬜ against every Feature ID).
 
 <details>
 <summary><strong>What it is / isn't — click to expand</strong></summary>
@@ -141,9 +152,16 @@ It is **not** part of the production build:
 - Hardcoded mock data instead of real API calls
 - A direct client-side call to an LLM API instead of going through the
   backend/AI service
+- Data is in-memory only and resets on reload — no real backend,
+  persistence, or bank integrations
 
 It exists purely as a design and interaction reference while the real
 Next.js frontend is built out against the actual backend.
+
+**Not simulated (by design):** real backend/persistence, actual
+Account Aggregator/bank integrations, Document Intelligence & OCR upload
+(M20–24), Knowledge Base (M18), Support surfaces (M31), login/2FA, true
+multi-agent orchestration, and production security.
 
 **Running it locally:**
 ```bash
@@ -152,6 +170,10 @@ npm install
 npm run dev      # http://localhost:5173
 npm run build    # outputs to prototype/dist/
 ```
+
+Onboarding OTP is `1234`; use "Skip to demo dashboard" to bypass the flow
+on repeat runs. The AI Coach makes live model calls — on failure it degrades
+gracefully to a "deterministic features still work" state.
 
 </details>
 
@@ -175,7 +197,14 @@ Account Linking via Consent Framework**, under Epic 1.
 
 ## 📍 Status
 
-> 🟠 **Early build.** Currently scaffolding **Epic 1: Financial Onboarding
-> & Aggregation**, starting with **Ticket 1.1: Bank Account Linking via
-> Consent Framework**.
+> 🟠 **Early build (production stack).** Currently scaffolding **Epic 1:
+> Financial Onboarding & Aggregation**, starting with **Ticket 1.1: Bank
+> Account Linking via Consent Framework**.
+>
+> 🟢 **Prototype (design reference).** Wave 1 (Epics 1–5) is fully
+> functional in the `/prototype` JSX apps, with modules from Epics 6–9 and
+> the Enterprise Addendum also represented. See the
+> [Demo Guide & Coverage Map](FinPilot_Demo_Guide_and_Coverage_Map.md) for
+> the walkthrough script and per-feature status — this is UX/product
+> validation, not a substitute for the production backend/frontend build.
 
